@@ -45,6 +45,14 @@ This project should always be safe and reversible.
 - Keep per-aircraft overlay configuration outside the original aircraft files where practical.
 - Prefer small, testable changes.
 
+## Windows Python note
+
+On Windows, use the Python launcher in examples:
+
+````powershell
+py tools\validate_obj_library.py
+````
+
 ## Initial phases
 
 1. Repo setup.
