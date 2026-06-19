@@ -1,0 +1,31 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Build/output
+dist/
+build/
+*.egg-info/
+
+# X-Plane / local aircraft backups and generated installs
+backups/
+*.acf.bak
+*.acf.backup
+*.tmp
+*.log
+
+# Do not accidentally commit full aircraft folders
+Aircraft/
+X-Plane 12/
