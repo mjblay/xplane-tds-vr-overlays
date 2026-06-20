@@ -66,6 +66,24 @@ def list_profiles(_: argparse.Namespace) -> int:
 
     return 0
 
+OVERLAY_PATH_MARKERS = [
+    "TDS_Test/",
+    "TDS_Overlay/",
+    "ScreenOnly",
+    "TDS_GTN750_ScreenOnly",
+    "TDS_GTN650_ScreenOnly",
+]
+
+
+def find_existing_overlay_objects(objects: dict[int, AcfObject]) -> list[AcfObject]:
+    found: list[AcfObject] = []
+    for obj in objects.values():
+        if not obj.file_stl:
+            continue
+        normalized = obj.file_stl.replace("\\", "/")
+        if any(marker in normalized for marker in OVERLAY_PATH_MARKERS):
+            found.append(obj)
+    return sorted(found, key=lambda obj: obj.index)
 
 def find_acf_files(aircraft_path: Path) -> list[Path]:
     return sorted(aircraft_path.glob("*.acf"))
@@ -381,6 +399,14 @@ def plan_install(args: argparse.Namespace) -> int:
         print(f"    current _obja/count: {object_count}")
         print(f"    planned _obja/count: {new_count}")
 
+        existing_overlays = find_existing_overlay_objects(objects)
+        if existing_overlays:
+            print("    existing overlay-like objects detected:")
+            for existing in existing_overlays:
+                print(f"      - index {existing.index}: flags={existing.obj_flags} file={existing.file_stl}")
+            print("    apply patching will refuse this ACF unless replacement support is added later.")
+            print()
+
         for offset, overlay in enumerate(enabled_overlays):
             placement = overlay.get("placement", {})
             object_path = f"{destination_folder}/{overlay['installed_object']}".replace("\\", "/")
@@ -392,7 +418,6 @@ def plan_install(args: argparse.Namespace) -> int:
 
         print(f"      P _obja/count {new_count}")
         print()
-
     print()
 
     backup_policy = profile.get("backup_policy", {})
