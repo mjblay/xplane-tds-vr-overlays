@@ -5,7 +5,84 @@
 
 namespace {
 
+struct WindowGeometry {
+    int left = 100;
+    int top = 700;
+    int right = 480;
+    int bottom = 580;
+};
+
 XPLMWindowID g_window = nullptr;
+WindowGeometry g_lastDesktopGeometry;
+bool g_hasLastDesktopGeometry = false;
+
+WindowGeometry DefaultDesktopGeometry() {
+    int screenLeft = 0;
+    int screenTop = 900;
+    int screenRight = 1600;
+    int screenBottom = 0;
+    XPLMGetScreenBoundsGlobal(&screenLeft, &screenTop, &screenRight, &screenBottom);
+
+    constexpr int windowWidth = 420;
+    constexpr int windowHeight = 140;
+    constexpr int marginLeft = 120;
+    constexpr int marginTop = 120;
+
+    WindowGeometry geometry;
+    geometry.left = screenLeft + marginLeft;
+    geometry.top = screenTop - marginTop;
+    geometry.right = geometry.left + windowWidth;
+    geometry.bottom = geometry.top - windowHeight;
+
+    if (geometry.right > screenRight) {
+        geometry.right = screenRight - 40;
+        geometry.left = geometry.right - windowWidth;
+    }
+
+    if (geometry.bottom < screenBottom) {
+        geometry.bottom = screenBottom + 40;
+        geometry.top = geometry.bottom + windowHeight;
+    }
+
+    return geometry;
+}
+
+WindowGeometry InitialDesktopGeometry() {
+    if (g_hasLastDesktopGeometry) {
+        return g_lastDesktopGeometry;
+    }
+
+    return DefaultDesktopGeometry();
+}
+
+void StoreCurrentDesktopGeometry() {
+    if (g_window == nullptr) {
+        return;
+    }
+
+    WindowGeometry geometry;
+    XPLMGetWindowGeometry(g_window, &geometry.left, &geometry.top, &geometry.right, &geometry.bottom);
+
+    if (geometry.right <= geometry.left || geometry.top <= geometry.bottom) {
+        return;
+    }
+
+    g_lastDesktopGeometry = geometry;
+    g_hasLastDesktopGeometry = true;
+}
+
+void ApplyDesktopGeometry() {
+    if (g_window == nullptr || !g_hasLastDesktopGeometry) {
+        return;
+    }
+
+    XPLMSetWindowGeometry(
+        g_window,
+        g_lastDesktopGeometry.left,
+        g_lastDesktopGeometry.top,
+        g_lastDesktopGeometry.right,
+        g_lastDesktopGeometry.bottom);
+}
 
 void DrawWindow(XPLMWindowID windowId, void*) {
     int left = 0;
@@ -19,9 +96,11 @@ void DrawWindow(XPLMWindowID windowId, void*) {
     float white[] = {1.0f, 1.0f, 1.0f};
     char title[] = "XPTO runtime skeleton";
     char subtitle[] = "No overlay movement implemented";
+    char modeText[] = "Window mode: 2D floating";
 
     XPLMDrawString(white, left + 16, top - 28, title, nullptr, xplmFont_Basic);
     XPLMDrawString(white, left + 16, top - 50, subtitle, nullptr, xplmFont_Basic);
+    XPLMDrawString(white, left + 16, top - 72, modeText, nullptr, xplmFont_Basic);
 }
 
 void HandleKey(XPLMWindowID, char, XPLMKeyFlags, char, void*, int) {
@@ -44,12 +123,14 @@ void CreateRuntimeWindow() {
         return;
     }
 
+    const WindowGeometry geometry = InitialDesktopGeometry();
+
     XPLMCreateWindow_t params = {};
     params.structSize = sizeof(params);
-    params.left = 100;
-    params.top = 700;
-    params.right = 460;
-    params.bottom = 580;
+    params.left = geometry.left;
+    params.top = geometry.top;
+    params.right = geometry.right;
+    params.bottom = geometry.bottom;
     params.visible = 1;
     params.drawWindowFunc = DrawWindow;
     params.handleMouseClickFunc = HandleMouseClick;
@@ -70,6 +151,7 @@ void CreateRuntimeWindow() {
     XPLMSetWindowPositioningMode(g_window, xplm_WindowPositionFree, -1);
     XPLMSetWindowGravity(g_window, 0.0f, 1.0f, 0.0f, 1.0f);
     XPLMSetWindowResizingLimits(g_window, 320, 100, 800, 400);
+    StoreCurrentDesktopGeometry();
 }
 
 }  // namespace
@@ -82,7 +164,17 @@ void ToggleRuntimeWindow() {
         return;
     }
 
-    DestroyRuntimeWindow();
+    const int isVisible = XPLMGetWindowIsVisible(g_window);
+    StoreCurrentDesktopGeometry();
+
+    if (isVisible) {
+        XPLMSetWindowIsVisible(g_window, 0);
+        return;
+    }
+
+    XPLMSetWindowPositioningMode(g_window, xplm_WindowPositionFree, -1);
+    ApplyDesktopGeometry();
+    XPLMSetWindowIsVisible(g_window, 1);
 }
 
 void DestroyRuntimeWindow() {
@@ -90,6 +182,7 @@ void DestroyRuntimeWindow() {
         return;
     }
 
+    StoreCurrentDesktopGeometry();
     XPLMDestroyWindow(g_window);
     g_window = nullptr;
 }
