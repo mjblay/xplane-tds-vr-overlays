@@ -110,6 +110,27 @@ def find_xplane_root(path: Path) -> Path | None:
             return candidate
     return None
 
+def validate_external_backup_root(aircraft_path: Path, backup_root: Path) -> str | None:
+    """Return an error message if backup_root is unsafe, otherwise None."""
+    aircraft_path_resolved = aircraft_path.resolve()
+    backup_root_resolved = backup_root.resolve()
+
+    try:
+        backup_root_resolved.relative_to(aircraft_path_resolved)
+        return f"Backup root must not be inside the aircraft folder: {backup_root_resolved}"
+    except ValueError:
+        pass
+
+    xplane_root = find_xplane_root(aircraft_path_resolved)
+    if xplane_root is not None:
+        try:
+            backup_root_resolved.relative_to(xplane_root)
+            return f"Backup root must not be inside the X-Plane folder: {backup_root_resolved}"
+        except ValueError:
+            pass
+
+    return None
+
 
 def parse_acf_objects(acf_path: Path) -> tuple[dict[int, AcfObject], int | None]:
     objects: dict[int, AcfObject] = {}
@@ -371,10 +392,6 @@ def build_acf_object_block(
 def plan_install(args: argparse.Namespace) -> int:
     aircraft_path = Path(args.aircraft)
 
-    if not aircraft_path.exists():
-        print(f"Aircraft path not found: {aircraft_path}")
-        return 1
-
     profiles = load_profiles()
     profile = profiles.get(args.profile)
 
@@ -501,6 +518,11 @@ def plan_install(args: argparse.Namespace) -> int:
             print(exc)
             return 1
 
+        backup_error = validate_external_backup_root(aircraft_path, backup_root)
+        if backup_error is not None:
+            print(backup_error)
+            return 1
+
         backup_dir = ensure_backup_dir(aircraft_path, profile, backup_root)
 
         print(f"  Backup folder: {backup_dir}")
@@ -569,26 +591,12 @@ def list_backups(args: argparse.Namespace) -> int:
         print(f"Backup root is not a folder: {backup_root}")
         return 1
 
-    aircraft_path_resolved = aircraft_path.resolve()
-    backup_root_resolved = backup_root.resolve()
-
-    try:
-        backup_root_resolved.relative_to(aircraft_path_resolved)
-        print(f"Backup root must not be inside the aircraft folder: {backup_root_resolved}")
+    backup_error = validate_external_backup_root(aircraft_path, backup_root)
+    if backup_error is not None:
+        print(backup_error)
         return 1
-    except ValueError:
-        pass
 
-    xplane_root = find_xplane_root(aircraft_path_resolved)
-    if xplane_root is not None:
-        try:
-            backup_root_resolved.relative_to(xplane_root)
-            print(f"Backup root must not be inside the X-Plane folder: {backup_root_resolved}")
-            return 1
-        except ValueError:
-            pass
-
-    aircraft_backup_root = backup_root_resolved / aircraft_path.name
+    aircraft_backup_root = backup_root.resolve() / aircraft_path.name
 
     if not aircraft_backup_root.exists():
         print(f"No backup folder found for aircraft: {aircraft_backup_root}")
