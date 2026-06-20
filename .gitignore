@@ -70,3 +70,4 @@ docs/aircraft-notes/*-acf-object-lines.txt
 docs/aircraft-notes/*-tds-search.txt
 docs/aircraft-notes/*-inventory-full.txt
 docs/aircraft-notes/*-raw*.txt
+docs/aircraft-notes/*.local.txt

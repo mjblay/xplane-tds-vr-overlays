@@ -66,6 +66,24 @@ def list_profiles(_: argparse.Namespace) -> int:
 
     return 0
 
+OVERLAY_PATH_MARKERS = [
+    "TDS_Test/",
+    "TDS_Overlay/",
+    "ScreenOnly",
+    "TDS_GTN750_ScreenOnly",
+    "TDS_GTN650_ScreenOnly",
+]
+
+
+def find_existing_overlay_objects(objects: dict[int, AcfObject]) -> list[AcfObject]:
+    found: list[AcfObject] = []
+    for obj in objects.values():
+        if not obj.file_stl:
+            continue
+        normalized = obj.file_stl.replace("\\", "/")
+        if any(marker in normalized for marker in OVERLAY_PATH_MARKERS):
+            found.append(obj)
+    return sorted(found, key=lambda obj: obj.index)
 
 def find_acf_files(aircraft_path: Path) -> list[Path]:
     return sorted(aircraft_path.glob("*.acf"))
@@ -313,9 +331,16 @@ def plan_install(args: argparse.Namespace) -> int:
             print(f"  - {profile_id}")
         return 1
 
+    if args.patch_acf and not args.apply:
+        print("--patch-acf requires --apply.")
+        return 1
+
     if args.apply:
         print("APPLY MODE: overlay objects may be copied, and existing files may be backed up.")
-        print("ACF files will NOT be patched in this version.")
+        if args.patch_acf:
+            print("ACF patching is enabled and will refuse files with existing overlay-like object entries.")
+        else:
+            print("ACF files will NOT be patched unless --patch-acf is also provided.")
     else:
         print("DRY RUN: no files will be modified.")
     print()
@@ -381,6 +406,14 @@ def plan_install(args: argparse.Namespace) -> int:
         print(f"    current _obja/count: {object_count}")
         print(f"    planned _obja/count: {new_count}")
 
+        existing_overlays = find_existing_overlay_objects(objects)
+        if existing_overlays:
+            print("    existing overlay-like objects detected:")
+            for existing in existing_overlays:
+                print(f"      - index {existing.index}: flags={existing.obj_flags} file={existing.file_stl}")
+            print("    apply patching will refuse this ACF unless replacement support is added later.")
+            print()
+
         for offset, overlay in enumerate(enabled_overlays):
             placement = overlay.get("placement", {})
             object_path = f"{destination_folder}/{overlay['installed_object']}".replace("\\", "/")
@@ -392,7 +425,6 @@ def plan_install(args: argparse.Namespace) -> int:
 
         print(f"      P _obja/count {new_count}")
         print()
-
     print()
 
     backup_policy = profile.get("backup_policy", {})
@@ -418,9 +450,35 @@ def plan_install(args: argparse.Namespace) -> int:
         for message in copy_overlay_objects(aircraft_path, profile, backup_dir):
             print(f"  {message}")
 
-        print()
-        print("Apply complete. ACF files were backed up but not modified.")
-        print("Next phase will add explicit ACF patching.")
+        if args.patch_acf:
+            print()
+            print("Patching ACF files:")
+
+            for acf_path in matched_acf_files:
+                objects, object_count = parse_acf_objects(acf_path)
+                existing_overlays = find_existing_overlay_objects(objects)
+
+                if existing_overlays:
+                    print(f"  Refusing to patch {acf_path.name}: existing overlay-like objects detected.")
+                    for existing in existing_overlays:
+                        print(f"    - index {existing.index}: flags={existing.obj_flags} file={existing.file_stl}")
+                    print()
+                    print("ACF patching was not performed.")
+                    print("Backups and overlay object copy operations may already have completed.")
+                    return 1
+
+                acf_text = acf_path.read_text(encoding="utf-8", errors="replace")
+                object_blocks, new_count = build_enabled_overlay_blocks(profile, objects, object_count)
+                patched_text = patch_acf_text(acf_text, objects, object_count, object_blocks)
+                acf_path.write_text(patched_text, encoding="utf-8", newline="\n")
+                print(f"  Patched {acf_path.name}: _obja/count {object_count} -> {new_count}")
+
+            print()
+            print("Apply complete. ACF files were patched. Reload the aircraft in X-Plane.")
+        else:
+            print()
+            print("Apply complete. ACF files were backed up but not modified.")
+            print("Use --apply --patch-acf to explicitly patch matched ACF files.")
 
     return 0
 
@@ -461,6 +519,58 @@ def list_backups(args: argparse.Namespace) -> int:
 
     return 0
 
+def patch_acf_text(
+    acf_text: str,
+    objects: dict[int, AcfObject],
+    object_count: int | None,
+    object_blocks: list[list[str]],
+) -> str:
+    lines = acf_text.splitlines()
+    next_index_count = max(objects.keys(), default=-1) + len(object_blocks) + 1
+    new_count = max(object_count or 0, next_index_count)
+
+    count_line_index: int | None = None
+    for i, line in enumerate(lines):
+        if line.startswith("P _obja/count "):
+            count_line_index = i
+            break
+
+    if count_line_index is None:
+        raise ValueError("ACF file does not contain P _obja/count line")
+
+    new_lines: list[str] = []
+    for block in object_blocks:
+        new_lines.extend(block)
+
+    # Insert new object blocks immediately before the count line, then update count.
+    lines[count_line_index:count_line_index] = new_lines
+    lines[count_line_index + len(new_lines)] = f"P _obja/count {new_count}"
+
+    return "\n".join(lines) + "\n"
+
+
+def build_enabled_overlay_blocks(
+    profile: dict[str, Any],
+    objects: dict[int, AcfObject],
+    object_count: int | None,
+) -> tuple[list[list[str]], int]:
+    destination_folder = profile.get("install", {}).get("object_destination_folder", "objects/TDS_Overlay")
+    install = profile.get("install", {})
+    acf_object_flags_value = install.get("acf_object_flags_value", 9)
+    enabled_overlays = [overlay for overlay in profile.get("overlays", []) if overlay.get("enabled_by_default")]
+
+    next_index = max(objects.keys(), default=-1) + 1
+    blocks: list[list[str]] = []
+
+    for offset, overlay in enumerate(enabled_overlays):
+        placement = overlay.get("placement", {})
+        object_path = f"{destination_folder}/{overlay['installed_object']}".replace("\\", "/")
+        index = next_index + offset
+        blocks.append(build_acf_object_block(index, object_path, placement, acf_object_flags_value))
+
+    new_count = max(object_count or 0, next_index + len(enabled_overlays))
+    return blocks, new_count
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="xpto",
@@ -482,6 +592,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--apply",
         action="store_true",
         help="Apply safe file operations: create backups and copy overlay objects. Does not patch ACF files yet.",
+    )
+    plan_parser.add_argument(
+        "--patch-acf",
+        action="store_true",
+        help="With --apply, also patch matched ACF files. Refuses if existing overlay-like objects are detected.",
     )
     plan_parser.set_defaults(func=plan_install)
 
