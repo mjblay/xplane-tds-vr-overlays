@@ -29,3 +29,44 @@ backups/
 # Do not accidentally commit full aircraft folders
 Aircraft/
 X-Plane 12/
+
+# Local X-Plane / payware aircraft material
+# Never commit copied aircraft folders or extracted payware assets.
+Aircraft/
+X-Plane 12/
+SteamLibrary/
+Custom Scenery/
+
+# Common X-Plane aircraft/source files from third-party aircraft
+*.acf
+*_vrconfig.txt
+*vrconfig*.txt
+*_prefs.txt
+*.rep
+*.ini
+*.cfg
+*.json
+
+# X-Plane/payware assets
+*.obj
+*.png
+*.jpg
+*.jpeg
+*.dds
+*.wav
+*.snd
+*.pdf
+
+# Exception: allow project-owned overlay object library and project schemas/profiles
+!objects/
+!objects/**/*.obj
+!profiles/
+!profiles/**/*.json
+!schemas/
+!schemas/**/*.json
+
+# Investigation outputs generated from local aircraft
+docs/aircraft-notes/*-acf-object-lines.txt
+docs/aircraft-notes/*-tds-search.txt
+docs/aircraft-notes/*-inventory-full.txt
+docs/aircraft-notes/*-raw*.txt
