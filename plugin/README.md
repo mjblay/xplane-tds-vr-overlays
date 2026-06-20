@@ -9,6 +9,7 @@ The skeleton only:
 - adds `Show Runtime Tuner`
 - adds test marker instance proof menu actions
 - toggles a basic modern XPLM window titled `XPTO Runtime Tuner`
+- draws clickable marker controls inside the runtime tuner window
 - uses 2D floating window positioning outside VR and `xplm_WindowVR` while VR is active
 - loads an original project-created test OBJ and moves it as an XPLM instance
 
@@ -82,15 +83,9 @@ Start X-Plane in 2D and open:
 Plugins > XPTO > Show Runtime Tuner
 ```
 
-The menu item toggles the `XPTO Runtime Tuner` window. In 2D, the window uses normal floating positioning and should display:
+The menu item toggles the `XPTO Runtime Tuner` window. In 2D, the window uses normal floating positioning and shows marker status, current step size, marker local XYZ if known, and clickable controls.
 
-```text
-XPTO runtime skeleton
-No overlay movement implemented
-Window mode: 2D floating
-```
-
-Validate the 2D toggle and session-local position behavior:
+Validate the 2D window behavior:
 
 - Select `Show Runtime Tuner`; the window appears in a sane 2D position.
 - Move the window to a different visible 2D position.
@@ -99,14 +94,23 @@ Validate the 2D toggle and session-local position behavior:
 - Move the window again, then close it using its X-Plane window decoration/red close button.
 - Select `Show Runtime Tuner`; the window should reopen on the first click at the last moved position.
 
+Validate the clickable marker controls in 2D:
+
+- Click `Show Marker` in the XPTO Runtime Tuner window.
+- Confirm the window status changes to `Marker: shown` and local XYZ values appear.
+- Click `Left/Port`, `Right/Stbd`, `Up`, `Down`, `Fore`, and `Aft`; confirm the marker moves and the XYZ display updates.
+- Click `Step` to cycle through `1.00 m`, `0.25 m`, `0.05 m`, `0.005 m`, and `0.001 m`; confirm nudges use the selected step, including the 5 mm and 1 mm fine steps.
+- Click `Hide Marker`; confirm the marker disappears and status changes to `Marker: hidden`.
+
 Validate VR behavior:
 
 - Enter VR.
 - Select `Plugins > XPTO > Show Runtime Tuner`.
 - The same runtime tuner window should appear in the headset using `xplm_WindowVR` and show `Window mode: VR`.
+- Use `Show Marker`, pilot-friendly nudge buttons, `Step`, and `Hide Marker` from the VR window.
 - Exit VR and show the window again; it should return to normal 2D floating behavior without losing the stored 2D position.
 
-The plugin should not create duplicate runtime tuner windows. Position tracking is session-local only; it is not written to disk.
+The plugin should not create duplicate runtime tuner windows or duplicate marker instances. Position and step tracking are session-local only; they are not written to disk.
 
 ## Test Marker Instance Validation
 
@@ -124,7 +128,7 @@ It is loaded by the plugin with this X-Plane-relative path:
 Resources/plugins/XPTO/assets/xpto_test_marker.obj
 ```
 
-Use these menu items:
+Menu items remain available for quick testing:
 
 ```text
 Plugins > XPTO > Show Test Marker
@@ -137,14 +141,14 @@ Plugins > XPTO > Nudge Test Marker +Z
 Plugins > XPTO > Nudge Test Marker -Z
 ```
 
-Validation steps in 2D and VR:
+Direction mapping for the tuner buttons:
 
-- Select `Show Test Marker`.
-- Check `Log.txt` for `XPTO:` messages showing the object path, object load result, aircraft local position, marker initial local position, and instance creation.
-- Look for a large bright magenta three-plane cross near the aircraft, initially about 8 meters forward along aircraft true heading and 3 meters above the aircraft local position.
-- Use the nudge menu items and confirm the marker moves live by 1 meter per nudge.
-- Select `Hide Test Marker` and confirm the marker disappears.
-- Disable or unload the plugin and confirm `Log.txt` shows instance/object cleanup messages.
+- `Left/Port` = positive local X, formerly `X+`.
+- `Right/Stbd` = negative local X, formerly `X-`.
+- `Up` = positive local Y, formerly `Y+`.
+- `Down` = negative local Y, formerly `Y-`.
+- `Fore` = positive local Z, formerly `Z+`.
+- `Aft` = negative local Z, formerly `Z-`.
 
 Coordinate frame for this proof:
 
@@ -158,3 +162,9 @@ Known unknowns:
 - This does not prove that plugin-created instances can support `ATTR_cockpit_device` or `ATTR_manip_device`.
 - Aircraft-relative cockpit placement will need conversion from aircraft pose/orientation to X-Plane local coordinates, likely every frame or whenever the aircraft moves.
 - This first marker may still appear differently in 2D and VR depending on view, culling, and where the local offset lands relative to the camera.
+
+Limitations:
+
+- Buttons are simple custom-drawn rectangles using XPLM window mouse callbacks, not a full widget toolkit.
+- The cursor remains the default pointer over buttons.
+- Step size and marker position are session-local only.
