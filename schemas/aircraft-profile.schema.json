@@ -1,0 +1,131 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mjblay/xplane-tds-vr-overlays/schemas/aircraft-profile.schema.json",
+  "title": "X-Plane TDS VR Overlay Aircraft Profile",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "profile_id",
+    "aircraft",
+    "matching",
+    "install",
+    "overlays",
+    "backup_policy"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "profile_id": {
+      "type": "string"
+    },
+    "aircraft": {
+      "type": "object",
+      "required": ["name", "vendor"],
+      "properties": {
+        "name": { "type": "string" },
+        "vendor": { "type": "string" },
+        "notes": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "matching": {
+      "type": "object",
+      "required": ["acf_filename_patterns"],
+      "properties": {
+        "acf_filename_patterns": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "required_files": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "install": {
+      "type": "object",
+      "required": ["object_destination_folder", "object_flags"],
+      "properties": {
+        "object_destination_folder": { "type": "string" },
+        "object_flags": {
+          "type": "object",
+          "required": ["clickable", "internal_cockpit", "external_cockpit"],
+          "properties": {
+            "clickable": { "type": "boolean" },
+            "internal_cockpit": { "type": "boolean" },
+            "external_cockpit": { "type": "boolean" }
+          },
+          "additionalProperties": false
+        },
+        "preserve_vrconfig": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "compatibility": {
+      "type": "object",
+      "properties": {
+        "stub_profile": { "type": "string" },
+        "notes": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "overlays": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "overlay_id",
+          "enabled_by_default",
+          "tds_unit",
+          "tds_device",
+          "source_object",
+          "installed_object",
+          "placement"
+        ],
+        "properties": {
+          "overlay_id": { "type": "string" },
+          "enabled_by_default": { "type": "boolean" },
+          "tds_unit": { "type": "string" },
+          "tds_device": { "type": "string" },
+          "source_object": { "type": "string" },
+          "installed_object": { "type": "string" },
+          "placement": {
+            "type": "object",
+            "required": ["x", "y", "z", "heading", "pitch", "roll", "scale"],
+            "properties": {
+              "x": { "type": "number" },
+              "y": { "type": "number" },
+              "z": { "type": "number" },
+              "heading": { "type": "number" },
+              "pitch": { "type": "number" },
+              "roll": { "type": "number" },
+              "scale": { "type": "number" },
+              "visible": { "type": "boolean" }
+            },
+            "additionalProperties": false
+          },
+          "notes": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "backup_policy": {
+      "type": "object",
+      "required": ["backup_before_patch", "backup_folder"],
+      "properties": {
+        "backup_before_patch": { "type": "boolean" },
+        "backup_folder": { "type": "string" },
+        "include_timestamp": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "notes": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  },
+  "additionalProperties": false
+}

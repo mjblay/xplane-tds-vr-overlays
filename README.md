@@ -67,3 +67,21 @@ py tools\validate_obj_library.py
 ## Status
 
 Phase 0: repository setup.
+
+## Validation
+
+Validate the object library:
+
+```powershell
+py tools\validate_obj_library.py
+```
+
+Validate aircraft profiles:
+
+```powershell
+py tools\validate_profiles.py
+```
+
+Current included profile:
+
+- `profiles/aircraft/thranda-f33a.json`
