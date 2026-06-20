@@ -62,6 +62,7 @@
         },
         "preserve_vrconfig": { "type": "boolean" }
       },
+      "acf_object_flags_value": { "type": "integer" },
       "additionalProperties": false
     },
     "compatibility": {

@@ -266,6 +266,35 @@ def copy_overlay_objects(
 
     return messages
 
+def format_float(value: Any) -> str:
+    try:
+        return f"{float(value):.9f}"
+    except (TypeError, ValueError):
+        return "0.000000000"
+
+
+def build_acf_object_block(
+    index: int,
+    object_path: str,
+    placement: dict[str, Any],
+    obj_flags: int,
+) -> list[str]:
+    return [
+        f"P _obja/{index}/_obj_flags {obj_flags}",
+        f"P _obja/{index}/_v10_att_body -1",
+        f"P _obja/{index}/_v10_att_file_stl {object_path}",
+        f"P _obja/{index}/_v10_att_gear -1",
+        f"P _obja/{index}/_v10_att_phi_ref {format_float(placement.get('roll'))}",
+        f"P _obja/{index}/_v10_att_psi_ref {format_float(placement.get('heading'))}",
+        f"P _obja/{index}/_v10_att_the_ref {format_float(placement.get('pitch'))}",
+        f"P _obja/{index}/_v10_att_wing -1",
+        f"P _obja/{index}/_v10_att_x_acf_prt_ref {format_float(placement.get('x'))}",
+        f"P _obja/{index}/_v10_att_y_acf_prt_ref {format_float(placement.get('y'))}",
+        f"P _obja/{index}/_v10_att_z_acf_prt_ref {format_float(placement.get('z'))}",
+        f"P _obja/{index}/_v10_is_internal 0",
+        f"P _obja/{index}/_v10_steers_with_gear 0",
+    ]
+
 
 def plan_install(args: argparse.Namespace) -> int:
     aircraft_path = Path(args.aircraft)
@@ -333,22 +362,37 @@ def plan_install(args: argparse.Namespace) -> int:
     print()
 
     print("Planned ACF additions:")
-    flags = profile.get("install", {}).get("object_flags", {})
-    print(f"  object flags: clickable={flags.get('clickable')} internal={flags.get('internal_cockpit')} external={flags.get('external_cockpit')}")
+    install = profile.get("install", {})
+    flags = install.get("object_flags", {})
+    acf_object_flags_value = install.get("acf_object_flags_value", 9)
+
+    print(f"  semantic flags: clickable={flags.get('clickable')} internal={flags.get('internal_cockpit')} external={flags.get('external_cockpit')}")
+    print(f"  ACF _obj_flags value: {acf_object_flags_value}")
+    print()
+
+    enabled_overlays = [overlay for overlay in profile.get("overlays", []) if overlay.get("enabled_by_default")]
 
     for acf_path in matched_acf_files:
-        objects, _ = parse_acf_objects(acf_path)
+        objects, object_count = parse_acf_objects(acf_path)
         next_index = max(objects.keys(), default=-1) + 1
+        new_count = max(object_count or 0, next_index + len(enabled_overlays))
 
-        for offset, overlay in enumerate(o for o in profile.get("overlays", []) if o.get("enabled_by_default")):
+        print(f"  {acf_path.name}:")
+        print(f"    current _obja/count: {object_count}")
+        print(f"    planned _obja/count: {new_count}")
+
+        for offset, overlay in enumerate(enabled_overlays):
             placement = overlay.get("placement", {})
             object_path = f"{destination_folder}/{overlay['installed_object']}".replace("\\", "/")
+            index = next_index + offset
 
-            print(f"  - {acf_path.name} index {next_index + offset}")
-            print(f"      object:  {object_path}")
-            print(f"      x/y/z:   {placement.get('x')} / {placement.get('y')} / {placement.get('z')}")
-            print(f"      h/p/r:   {placement.get('heading')} / {placement.get('pitch')} / {placement.get('roll')}")
-            print(f"      scale:   {placement.get('scale')}")
+            print(f"    append object index {index}: {overlay['overlay_id']}")
+            for line in build_acf_object_block(index, object_path, placement, acf_object_flags_value):
+                print(f"      {line}")
+
+        print(f"      P _obja/count {new_count}")
+        print()
+
     print()
 
     backup_policy = profile.get("backup_policy", {})
