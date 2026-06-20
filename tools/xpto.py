@@ -380,6 +380,42 @@ def plan_install(args: argparse.Namespace) -> int:
 
     return 0
 
+def list_backups(args: argparse.Namespace) -> int:
+    aircraft_path = Path(args.aircraft)
+
+    if not aircraft_path.exists():
+        print(f"Aircraft path not found: {aircraft_path}")
+        return 1
+
+    backup_root = aircraft_path / args.backup_folder
+
+    if not backup_root.exists():
+        print(f"No backup folder found: {backup_root}")
+        return 0
+
+    backups = sorted(
+        [path for path in backup_root.iterdir() if path.is_dir()],
+        key=lambda path: path.stat().st_mtime,
+        reverse=True,
+    )
+
+    if not backups:
+        print(f"No backups found in: {backup_root}")
+        return 0
+
+    print(f"Backups in: {backup_root}")
+    print()
+
+    for backup in backups:
+        files = [path for path in backup.rglob("*") if path.is_file()]
+        print(f"{backup.name}")
+        print(f"  Files: {len(files)}")
+        for path in files:
+            rel = path.relative_to(backup)
+            print(f"    - {rel}")
+        print()
+
+    return 0
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -404,6 +440,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="Apply safe file operations: create backups and copy overlay objects. Does not patch ACF files yet.",
     )
     plan_parser.set_defaults(func=plan_install)
+
+    backups_parser = subparsers.add_parser("list-backups", help="List aircraft-local overlay backups.")
+    backups_parser.add_argument("aircraft", help="Path to aircraft folder.")
+    backups_parser.add_argument(
+        "--backup-folder",
+        default="TDS_Overlay_Backups",
+        help="Backup folder name inside the aircraft folder. Default: TDS_Overlay_Backups",
+    )
+    backups_parser.set_defaults(func=list_backups)
 
     return parser
 
