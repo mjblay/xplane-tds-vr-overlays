@@ -238,11 +238,56 @@ def acf_matches_profile(acf_path: Path, profile: dict[str, Any]) -> bool:
 def timestamp() -> str:
     return datetime.now().strftime("%Y%m%d-%H%M%S")
 
+def resolve_backup_root(args: argparse.Namespace, aircraft_path: Path) -> Path:
+    if not args.backup_root:
+        raise ValueError("--backup-root is required with --apply. Choose a folder outside the X-Plane installation.")
 
-def ensure_backup_dir(aircraft_path: Path, profile: dict[str, Any]) -> Path:
+    backup_root = Path(args.backup_root)
+
+    if not backup_root.exists():
+        raise ValueError(f"Backup root does not exist: {backup_root}")
+
+    if not backup_root.is_dir():
+        raise ValueError(f"Backup root is not a directory: {backup_root}")
+
+    backup_root = backup_root.resolve()
+    aircraft_path = aircraft_path.resolve()
+
+    if backup_root == aircraft_path or aircraft_path in backup_root.parents:
+        raise ValueError(f"Backup root must not be inside the aircraft folder: {backup_root}")
+
+    # Conservative X-Plane-folder check: if the aircraft path contains an Aircraft folder,
+    # treat its parent as the X-Plane root and disallow backups anywhere under it.
+    xplane_root: Path | None = None
+    for parent in [aircraft_path, *aircraft_path.parents]:
+        if parent.name == "Aircraft":
+            xplane_root = parent.parent
+            break
+
+    if xplane_root is not None and (backup_root == xplane_root or xplane_root in backup_root.parents):
+        raise ValueError(f"Backup root must be outside the X-Plane folder: {backup_root}")
+
+    test_file = backup_root / ".xpto_write_test"
+    try:
+        test_file.write_text("test", encoding="utf-8")
+        test_file.unlink()
+    except OSError as exc:
+        raise ValueError(f"Backup root is not writable: {backup_root}") from exc
+
+    return backup_root
+
+
+def ensure_backup_dir(aircraft_path: Path, profile: dict[str, Any], backup_root: Path) -> Path:
     backup_policy = profile.get("backup_policy", {})
-    backup_folder = backup_policy.get("backup_folder", "TDS_Overlay_Backups")
-    backup_dir = aircraft_path / backup_folder / timestamp()
+    include_timestamp = backup_policy.get("include_timestamp", True)
+
+    aircraft_backup_root = backup_root / aircraft_path.name
+
+    if include_timestamp:
+        backup_dir = aircraft_backup_root / timestamp()
+    else:
+        backup_dir = aircraft_backup_root
+
     backup_dir.mkdir(parents=True, exist_ok=True)
     return backup_dir
 
@@ -372,6 +417,10 @@ def plan_install(args: argparse.Namespace) -> int:
     print()
 
     destination_folder = profile.get("install", {}).get("object_destination_folder", "objects/TDS_Overlay")
+    acf_object_folder = destination_folder.replace("\\", "/")
+
+    if acf_object_folder.startswith("objects/"):
+        acf_object_folder = acf_object_folder[len("objects/"):]
     print("Planned object copy operations:")
     for overlay in profile.get("overlays", []):
         if not overlay.get("enabled_by_default"):
@@ -416,7 +465,7 @@ def plan_install(args: argparse.Namespace) -> int:
 
         for offset, overlay in enumerate(enabled_overlays):
             placement = overlay.get("placement", {})
-            object_path = f"{destination_folder}/{overlay['installed_object']}".replace("\\", "/")
+            object_path = f"{acf_object_folder}/{overlay['installed_object']}".replace("\\", "/")
             index = next_index + offset
 
             print(f"    append object index {index}: {overlay['overlay_id']}")
@@ -436,7 +485,15 @@ def plan_install(args: argparse.Namespace) -> int:
 
     if args.apply:
         print("Applying safe file operations:")
-        backup_dir = ensure_backup_dir(aircraft_path, profile)
+        
+        try:
+            backup_root = resolve_backup_root(args, aircraft_path)
+        except ValueError as exc:
+            print(exc)
+            return 1
+
+        backup_dir = ensure_backup_dir(aircraft_path, profile, backup_root)
+
         print(f"  Backup folder: {backup_dir}")
 
         for acf_path in matched_acf_files:
@@ -555,6 +612,12 @@ def build_enabled_overlay_blocks(
     object_count: int | None,
 ) -> tuple[list[list[str]], int]:
     destination_folder = profile.get("install", {}).get("object_destination_folder", "objects/TDS_Overlay")
+
+    acf_object_folder = destination_folder.replace("\\", "/")
+
+    if acf_object_folder.startswith("objects/"):
+        acf_object_folder = acf_object_folder[len("objects/"):]
+
     install = profile.get("install", {})
     acf_object_flags_value = install.get("acf_object_flags_value", 9)
     enabled_overlays = [overlay for overlay in profile.get("overlays", []) if overlay.get("enabled_by_default")]
@@ -564,7 +627,7 @@ def build_enabled_overlay_blocks(
 
     for offset, overlay in enumerate(enabled_overlays):
         placement = overlay.get("placement", {})
-        object_path = f"{destination_folder}/{overlay['installed_object']}".replace("\\", "/")
+        object_path = f"{acf_object_folder}/{overlay['installed_object']}".replace("\\", "/")
         index = next_index + offset
         blocks.append(build_acf_object_block(index, object_path, placement, acf_object_flags_value))
 
@@ -597,6 +660,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--patch-acf",
         action="store_true",
         help="With --apply, also patch matched ACF files. Refuses if existing overlay-like objects are detected.",
+    )
+    plan_parser.add_argument(
+        "--backup-root",
+        help="Required with --apply. Existing aircraft files are backed up under this external folder, outside the X-Plane folder.",
     )
     plan_parser.set_defaults(func=plan_install)
 
