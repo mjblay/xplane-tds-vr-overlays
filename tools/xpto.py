@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -215,6 +217,55 @@ def acf_matches_profile(acf_path: Path, profile: dict[str, Any]) -> bool:
     patterns = profile.get("matching", {}).get("acf_filename_patterns", [])
     return any(fnmatch.fnmatch(acf_path.name, pattern) for pattern in patterns)
 
+def timestamp() -> str:
+    return datetime.now().strftime("%Y%m%d-%H%M%S")
+
+
+def ensure_backup_dir(aircraft_path: Path, profile: dict[str, Any]) -> Path:
+    backup_policy = profile.get("backup_policy", {})
+    backup_folder = backup_policy.get("backup_folder", "TDS_Overlay_Backups")
+    backup_dir = aircraft_path / backup_folder / timestamp()
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    return backup_dir
+
+
+def backup_file(source: Path, backup_dir: Path, aircraft_path: Path) -> Path:
+    rel = source.relative_to(aircraft_path)
+    destination = backup_dir / rel
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source, destination)
+    return destination
+
+
+def copy_overlay_objects(
+    aircraft_path: Path,
+    profile: dict[str, Any],
+    backup_dir: Path,
+) -> list[str]:
+    messages: list[str] = []
+    destination_folder = profile.get("install", {}).get("object_destination_folder", "objects/TDS_Overlay")
+    destination_dir = aircraft_path / destination_folder
+    destination_dir.mkdir(parents=True, exist_ok=True)
+
+    for overlay in profile.get("overlays", []):
+        if not overlay.get("enabled_by_default"):
+            continue
+
+        source = Path(overlay["source_object"])
+        destination = destination_dir / overlay["installed_object"]
+
+        if not source.exists():
+            raise FileNotFoundError(f"Overlay source object not found: {source}")
+
+        if destination.exists():
+            backed_up_to = backup_file(destination, backup_dir, aircraft_path)
+            messages.append(f"Backed up existing overlay: {destination} -> {backed_up_to}")
+
+        shutil.copy2(source, destination)
+        messages.append(f"Copied overlay: {source} -> {destination}")
+
+    return messages
+
 
 def plan_install(args: argparse.Namespace) -> int:
     aircraft_path = Path(args.aircraft)
@@ -233,7 +284,11 @@ def plan_install(args: argparse.Namespace) -> int:
             print(f"  - {profile_id}")
         return 1
 
-    print("DRY RUN: no files will be modified.")
+    if args.apply:
+        print("APPLY MODE: overlay objects may be copied, and existing files may be backed up.")
+        print("ACF files will NOT be patched in this version.")
+    else:
+        print("DRY RUN: no files will be modified.")
     print()
 
     print(f"Aircraft path: {aircraft_path}")
@@ -301,9 +356,66 @@ def plan_install(args: argparse.Namespace) -> int:
     print(f"  backup_before_patch: {backup_policy.get('backup_before_patch')}")
     print(f"  backup_folder:       {backup_policy.get('backup_folder')}")
     print(f"  include_timestamp:   {backup_policy.get('include_timestamp')}")
+    print()
+
+    if args.apply:
+        print("Applying safe file operations:")
+        backup_dir = ensure_backup_dir(aircraft_path, profile)
+        print(f"  Backup folder: {backup_dir}")
+
+        for acf_path in matched_acf_files:
+            backed_up_to = backup_file(acf_path, backup_dir, aircraft_path)
+            print(f"  Backed up ACF: {acf_path} -> {backed_up_to}")
+
+        for vrconfig_path in find_vrconfig_files(aircraft_path):
+            backed_up_to = backup_file(vrconfig_path, backup_dir, aircraft_path)
+            print(f"  Backed up VRCONFIG: {vrconfig_path} -> {backed_up_to}")
+
+        for message in copy_overlay_objects(aircraft_path, profile, backup_dir):
+            print(f"  {message}")
+
+        print()
+        print("Apply complete. ACF files were backed up but not modified.")
+        print("Next phase will add explicit ACF patching.")
 
     return 0
 
+def list_backups(args: argparse.Namespace) -> int:
+    aircraft_path = Path(args.aircraft)
+
+    if not aircraft_path.exists():
+        print(f"Aircraft path not found: {aircraft_path}")
+        return 1
+
+    backup_root = aircraft_path / args.backup_folder
+
+    if not backup_root.exists():
+        print(f"No backup folder found: {backup_root}")
+        return 0
+
+    backups = sorted(
+        [path for path in backup_root.iterdir() if path.is_dir()],
+        key=lambda path: path.stat().st_mtime,
+        reverse=True,
+    )
+
+    if not backups:
+        print(f"No backups found in: {backup_root}")
+        return 0
+
+    print(f"Backups in: {backup_root}")
+    print()
+
+    for backup in backups:
+        files = [path for path in backup.rglob("*") if path.is_file()]
+        print(f"{backup.name}")
+        print(f"  Files: {len(files)}")
+        for path in files:
+            rel = path.relative_to(backup)
+            print(f"    - {rel}")
+        print()
+
+    return 0
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -322,7 +434,21 @@ def build_parser() -> argparse.ArgumentParser:
     plan_parser = subparsers.add_parser("plan-install", help="Plan an overlay install without modifying files.")
     plan_parser.add_argument("--aircraft", required=True, help="Path to aircraft folder.")
     plan_parser.add_argument("--profile", required=True, help="Profile ID, such as thranda-f33a or pae-a36.")
+    plan_parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="Apply safe file operations: create backups and copy overlay objects. Does not patch ACF files yet.",
+    )
     plan_parser.set_defaults(func=plan_install)
+
+    backups_parser = subparsers.add_parser("list-backups", help="List aircraft-local overlay backups.")
+    backups_parser.add_argument("aircraft", help="Path to aircraft folder.")
+    backups_parser.add_argument(
+        "--backup-folder",
+        default="TDS_Overlay_Backups",
+        help="Backup folder name inside the aircraft folder. Default: TDS_Overlay_Backups",
+    )
+    backups_parser.set_defaults(func=list_backups)
 
     return parser
 
