@@ -101,6 +101,15 @@ def find_tds_config_files(aircraft_path: Path) -> list[Path]:
     ]
     return [aircraft_path / name for name in names if (aircraft_path / name).exists()]
 
+def find_xplane_root(path: Path) -> Path | None:
+    """Best-effort detection of the X-Plane root from an aircraft path."""
+    for candidate in [path, *path.parents]:
+        if (candidate / "X-Plane.exe").exists():
+            return candidate
+        if (candidate / "Resources").exists() and (candidate / "Aircraft").exists():
+            return candidate
+    return None
+
 
 def parse_acf_objects(acf_path: Path) -> tuple[dict[int, AcfObject], int | None]:
     objects: dict[int, AcfObject] = {}
@@ -546,23 +555,57 @@ def list_backups(args: argparse.Namespace) -> int:
         print(f"Aircraft path not found: {aircraft_path}")
         return 1
 
-    backup_root = aircraft_path / args.backup_folder
+    if not aircraft_path.is_dir():
+        print(f"Aircraft path is not a folder: {aircraft_path}")
+        return 1
+
+    backup_root = Path(args.backup_root)
 
     if not backup_root.exists():
-        print(f"No backup folder found: {backup_root}")
+        print(f"Backup root not found: {backup_root}")
+        return 1
+
+    if not backup_root.is_dir():
+        print(f"Backup root is not a folder: {backup_root}")
+        return 1
+
+    aircraft_path_resolved = aircraft_path.resolve()
+    backup_root_resolved = backup_root.resolve()
+
+    try:
+        backup_root_resolved.relative_to(aircraft_path_resolved)
+        print(f"Backup root must not be inside the aircraft folder: {backup_root_resolved}")
+        return 1
+    except ValueError:
+        pass
+
+    xplane_root = find_xplane_root(aircraft_path_resolved)
+    if xplane_root is not None:
+        try:
+            backup_root_resolved.relative_to(xplane_root)
+            print(f"Backup root must not be inside the X-Plane folder: {backup_root_resolved}")
+            return 1
+        except ValueError:
+            pass
+
+    aircraft_backup_root = backup_root_resolved / aircraft_path.name
+
+    if not aircraft_backup_root.exists():
+        print(f"No backup folder found for aircraft: {aircraft_backup_root}")
         return 0
 
     backups = sorted(
-        [path for path in backup_root.iterdir() if path.is_dir()],
+        [path for path in aircraft_backup_root.iterdir() if path.is_dir()],
         key=lambda path: path.stat().st_mtime,
         reverse=True,
     )
 
     if not backups:
-        print(f"No backups found in: {backup_root}")
+        print(f"No backups found in: {aircraft_backup_root}")
         return 0
 
-    print(f"Backups in: {backup_root}")
+    print(f"Backups for: {aircraft_path.name}")
+    print(f"Backup root: {aircraft_backup_root}")
     print()
 
     for backup in backups:
@@ -667,12 +710,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     plan_parser.set_defaults(func=plan_install)
 
-    backups_parser = subparsers.add_parser("list-backups", help="List aircraft-local overlay backups.")
+    backups_parser = subparsers.add_parser("list-backups", help="List external aircraft overlay backups.")
     backups_parser.add_argument("aircraft", help="Path to aircraft folder.")
     backups_parser.add_argument(
-        "--backup-folder",
-        default="TDS_Overlay_Backups",
-        help="Backup folder name inside the aircraft folder. Default: TDS_Overlay_Backups",
+        "--backup-root",
+        required=True,
+        help="External backup root folder, outside the X-Plane folder.",
     )
     backups_parser.set_defaults(func=list_backups)
 
