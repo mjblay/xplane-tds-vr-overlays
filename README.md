@@ -85,3 +85,6 @@ py tools\validate_profiles.py
 Current included profile:
 
 - `profiles/aircraft/thranda-f33a.json`
+- `profiles/aircraft/pae-a36.json`
+
+- [Safe install workflow](docs/safe-install-workflow.md)
