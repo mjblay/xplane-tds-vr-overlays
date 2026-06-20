@@ -17,11 +17,13 @@ POINT_COUNTS 24 0 0 36
 # external cockpit = unchecked
 # heading = 0, pitch = 0, roll = 0
 
-# Visible TDS screen quad, GTN750 aspect ~= 0.80
-VT -0.080  0.100  0.000   0.0 0.0 1.0   0.0 1.0
-VT  0.080  0.100  0.000   0.0 0.0 1.0   1.0 1.0
-VT  0.080 -0.100  0.000   0.0 0.0 1.0   1.0 0.0
-VT -0.080 -0.100  0.000   0.0 0.0 1.0   0.0 0.0
+
+# Visible TDS screen quad, GTN750 aspect ~= 0.881
+# Visible TDS screen quad, GTN650 aspect ~= 2.003
+VT -0.0661  0.0750  0.000   0.0 0.0 1.0   0.0 1.0
+VT  0.0661  0.0750  0.000   0.0 0.0 1.0   1.0 1.0
+VT  0.0661 -0.0750  0.000   0.0 0.0 1.0   1.0 0.0
+VT -0.0661 -0.0750  0.000   0.0 0.0 1.0   0.0 0.0
 
 # Five tiny hidden dummy quads for VRCONFIG manipulator matching
 VT -0.001  0.001 -0.050   0.0 0.0 1.0   0.0 1.0
