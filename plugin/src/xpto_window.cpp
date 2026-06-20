@@ -15,6 +15,7 @@ struct WindowGeometry {
 XPLMWindowID g_window = nullptr;
 WindowGeometry g_lastDesktopGeometry;
 bool g_hasLastDesktopGeometry = false;
+bool g_vrActive = false;
 
 WindowGeometry DefaultDesktopGeometry() {
     int screenLeft = 0;
@@ -56,7 +57,7 @@ WindowGeometry InitialDesktopGeometry() {
 }
 
 void StoreCurrentDesktopGeometry() {
-    if (g_window == nullptr) {
+    if (g_window == nullptr || XPLMWindowIsInVR(g_window)) {
         return;
     }
 
@@ -84,6 +85,22 @@ void ApplyDesktopGeometry() {
         g_lastDesktopGeometry.bottom);
 }
 
+void ApplyCurrentPositioningMode() {
+    if (g_window == nullptr) {
+        return;
+    }
+
+    if (g_vrActive) {
+        StoreCurrentDesktopGeometry();
+        XPLMSetWindowPositioningMode(g_window, xplm_WindowVR, -1);
+        return;
+    }
+
+    XPLMSetWindowPositioningMode(g_window, xplm_WindowPositionFree, -1);
+    XPLMSetWindowGravity(g_window, 0.0f, 1.0f, 0.0f, 1.0f);
+    ApplyDesktopGeometry();
+}
+
 void DrawWindow(XPLMWindowID windowId, void*) {
     int left = 0;
     int top = 0;
@@ -96,7 +113,9 @@ void DrawWindow(XPLMWindowID windowId, void*) {
     float white[] = {1.0f, 1.0f, 1.0f};
     char title[] = "XPTO runtime skeleton";
     char subtitle[] = "No overlay movement implemented";
-    char modeText[] = "Window mode: 2D floating";
+    char desktopMode[] = "Window mode: 2D floating";
+    char vrMode[] = "Window mode: VR";
+    char* modeText = g_vrActive ? vrMode : desktopMode;
 
     XPLMDrawString(white, left + 16, top - 28, title, nullptr, xplmFont_Basic);
     XPLMDrawString(white, left + 16, top - 50, subtitle, nullptr, xplmFont_Basic);
@@ -148,9 +167,8 @@ void CreateRuntimeWindow() {
     }
 
     XPLMSetWindowTitle(g_window, "XPTO Runtime Tuner");
-    XPLMSetWindowPositioningMode(g_window, xplm_WindowPositionFree, -1);
-    XPLMSetWindowGravity(g_window, 0.0f, 1.0f, 0.0f, 1.0f);
     XPLMSetWindowResizingLimits(g_window, 320, 100, 800, 400);
+    ApplyCurrentPositioningMode();
     StoreCurrentDesktopGeometry();
 }
 
@@ -165,16 +183,25 @@ void ToggleRuntimeWindow() {
     }
 
     const int isVisible = XPLMGetWindowIsVisible(g_window);
-    StoreCurrentDesktopGeometry();
 
     if (isVisible) {
+        StoreCurrentDesktopGeometry();
         XPLMSetWindowIsVisible(g_window, 0);
         return;
     }
 
-    XPLMSetWindowPositioningMode(g_window, xplm_WindowPositionFree, -1);
-    ApplyDesktopGeometry();
+    ApplyCurrentPositioningMode();
     XPLMSetWindowIsVisible(g_window, 1);
+}
+
+void SetRuntimeWindowVrActive(bool active) {
+    g_vrActive = active;
+
+    if (g_window == nullptr) {
+        return;
+    }
+
+    ApplyCurrentPositioningMode();
 }
 
 void DestroyRuntimeWindow() {

@@ -5,6 +5,7 @@
 #include "XPLMPlugin.h"
 
 #include "xpto_menu.h"
+#include "xpto_object_instance.h"
 #include "xpto_window.h"
 
 namespace {
@@ -27,6 +28,7 @@ PLUGIN_API int XPluginStart(char* outName, char* outSignature, char* outDescript
 }
 
 PLUGIN_API void XPluginStop() {
+    xpto::DestroyTestMarker();
     xpto::DestroyRuntimeWindow();
     xpto::DestroyMenu();
 }
@@ -36,10 +38,16 @@ PLUGIN_API int XPluginEnable() {
 }
 
 PLUGIN_API void XPluginDisable() {
+    xpto::HideTestMarker();
     xpto::DestroyRuntimeWindow();
 }
 
-PLUGIN_API void XPluginReceiveMessage(XPLMPluginID, int, void*) {
+PLUGIN_API void XPluginReceiveMessage(XPLMPluginID, int message, void*) {
+    if (message == XPLM_MSG_ENTERED_VR) {
+        xpto::SetRuntimeWindowVrActive(true);
+    } else if (message == XPLM_MSG_EXITING_VR) {
+        xpto::SetRuntimeWindowVrActive(false);
+    }
 }
 
 }  // extern "C"

@@ -11,6 +11,7 @@ include(XPlaneSdk)
 
 add_library(xpto_overlay_tuner MODULE
     src/xpto_menu.cpp
+    src/xpto_object_instance.cpp
     src/xpto_plugin.cpp
     src/xpto_window.cpp
 )
@@ -57,3 +58,10 @@ if(WIN32)
         LIBRARY_OUTPUT_DIRECTORY_MINSIZEREL "${CMAKE_BINARY_DIR}/XPTO/win_x64"
     )
 endif()
+
+add_custom_command(TARGET xpto_overlay_tuner POST_BUILD
+    COMMAND "${CMAKE_COMMAND}" -E copy_directory
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets"
+        "$<TARGET_FILE_DIR:xpto_overlay_tuner>/../assets"
+    COMMENT "Staging XPTO plugin assets"
+)
