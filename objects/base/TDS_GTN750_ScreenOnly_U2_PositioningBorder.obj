@@ -1,0 +1,178 @@
+A
+800
+OBJ
+
+POINT_COUNTS 40 0 0 60
+
+# TDS GTN750Xi screen-only overlay object, Unit 2, with hidden F33 VRCONFIG stub manipulators.
+#
+# Plane Maker:
+# clickable = checked
+# internal cockpit = unchecked
+# external cockpit = unchecked
+# heading = 0, pitch = 0, roll = 0
+
+# Visible TDS screen quad, GTN750 aspect ~= 0.881
+# Visible TDS screen quad, GTN650 aspect ~= 2.003
+VT -0.0661  0.0750  0.000   0.0 0.0 1.0   0.0 1.0
+VT  0.0661  0.0750  0.000   0.0 0.0 1.0   1.0 1.0
+VT  0.0661 -0.0750  0.000   0.0 0.0 1.0   1.0 0.0
+VT -0.0661 -0.0750  0.000   0.0 0.0 1.0   0.0 0.0
+
+# Five tiny hidden dummy quads for VRCONFIG manipulator matching
+VT -0.001  0.001 -0.050   0.0 0.0 1.0   0.0 1.0
+VT  0.001  0.001 -0.050   0.0 0.0 1.0   1.0 1.0
+VT  0.001 -0.001 -0.050   0.0 0.0 1.0   1.0 0.0
+VT -0.001 -0.001 -0.050   0.0 0.0 1.0   0.0 0.0
+
+VT -0.001  0.001 -0.055   0.0 0.0 1.0   0.0 1.0
+VT  0.001  0.001 -0.055   0.0 0.0 1.0   1.0 1.0
+VT  0.001 -0.001 -0.055   0.0 0.0 1.0   1.0 0.0
+VT -0.001 -0.001 -0.055   0.0 0.0 1.0   0.0 0.0
+
+VT -0.001  0.001 -0.060   0.0 0.0 1.0   0.0 1.0
+VT  0.001  0.001 -0.060   0.0 0.0 1.0   1.0 1.0
+VT  0.001 -0.001 -0.060   0.0 0.0 1.0   1.0 0.0
+VT -0.001 -0.001 -0.060   0.0 0.0 1.0   0.0 0.0
+
+VT -0.001  0.001 -0.065   0.0 0.0 1.0   0.0 1.0
+VT  0.001  0.001 -0.065   0.0 0.0 1.0   1.0 1.0
+VT  0.001 -0.001 -0.065   0.0 0.0 1.0   1.0 0.0
+VT -0.001 -0.001 -0.065   0.0 0.0 1.0   0.0 0.0
+
+VT -0.001  0.001 -0.070   0.0 0.0 1.0   0.0 1.0
+VT  0.001  0.001 -0.070   0.0 0.0 1.0   1.0 1.0
+VT  0.001 -0.001 -0.070   0.0 0.0 1.0   1.0 0.0
+VT -0.001 -0.001 -0.070   0.0 0.0 1.0   0.0 0.0
+
+# Screen indices
+IDX 0
+IDX 1
+IDX 2
+IDX 0
+IDX 2
+IDX 3
+
+# Stub 1
+IDX 4
+IDX 5
+IDX 6
+IDX 4
+IDX 6
+IDX 7
+
+# Stub 2
+IDX 8
+IDX 9
+IDX 10
+IDX 8
+IDX 10
+IDX 11
+
+# Stub 3
+IDX 12
+IDX 13
+IDX 14
+IDX 12
+IDX 14
+IDX 15
+
+# Stub 4
+IDX 16
+IDX 17
+IDX 18
+IDX 16
+IDX 18
+IDX 19
+
+# Stub 5
+IDX 20
+IDX 21
+IDX 22
+IDX 20
+IDX 22
+IDX 23
+
+
+# XPTO positioning border vertices
+VT -0.0681  0.0770 -0.0005   0.0 0.0 1.0   0.0 1.0
+VT  0.0681  0.0770 -0.0005   0.0 0.0 1.0   1.0 1.0
+VT  0.0681  0.0750 -0.0005   0.0 0.0 1.0   1.0 0.0
+VT -0.0681  0.0750 -0.0005   0.0 0.0 1.0   0.0 0.0
+VT -0.0681 -0.0750 -0.0005   0.0 0.0 1.0   0.0 1.0
+VT  0.0681 -0.0750 -0.0005   0.0 0.0 1.0   1.0 1.0
+VT  0.0681 -0.0770 -0.0005   0.0 0.0 1.0   1.0 0.0
+VT -0.0681 -0.0770 -0.0005   0.0 0.0 1.0   0.0 0.0
+VT -0.0681  0.0750 -0.0005   0.0 0.0 1.0   0.0 1.0
+VT -0.0661  0.0750 -0.0005   0.0 0.0 1.0   1.0 1.0
+VT -0.0661 -0.0750 -0.0005   0.0 0.0 1.0   1.0 0.0
+VT -0.0681 -0.0750 -0.0005   0.0 0.0 1.0   0.0 0.0
+VT  0.0661  0.0750 -0.0005   0.0 0.0 1.0   0.0 1.0
+VT  0.0681  0.0750 -0.0005   0.0 0.0 1.0   1.0 1.0
+VT  0.0681 -0.0750 -0.0005   0.0 0.0 1.0   1.0 0.0
+VT  0.0661 -0.0750 -0.0005   0.0 0.0 1.0   0.0 0.0
+
+# XPTO positioning border indices
+IDX 24
+IDX 25
+IDX 26
+IDX 24
+IDX 26
+IDX 27
+IDX 28
+IDX 29
+IDX 30
+IDX 28
+IDX 30
+IDX 31
+IDX 32
+IDX 33
+IDX 34
+IDX 32
+IDX 34
+IDX 35
+IDX 36
+IDX 37
+IDX 38
+IDX 36
+IDX 38
+IDX 39
+
+ATTR_no_cull
+ATTR_no_blend
+ATTR_draw_enable
+ATTR_diffuse_rgb 0.0 0.0 0.0
+
+# TDS custom-device screen
+ATTR_manip_device button TDSGTN750XI_U2 TDS_GTN750xi
+ATTR_cockpit_device TDSGTN750XI_U2 3 0 1
+TRIS 0 6
+
+# Hidden dummy manipulators to satisfy Thranda_F33_vrconfig.txt matching.
+ATTR_draw_disable
+ATTR_no_cockpit
+
+ATTR_manip_drag_xy hand 500.000 500.000 -1.000 1.000 1.000 -1.000 sim/cockpit2/controls/yoke_roll_ratio sim/cockpit2/controls/yoke_pitch_ratio Pilot's yoke
+TRIS 6 6
+
+ATTR_manip_drag_xy hand 500.000 500.000 -1.000 1.000 1.000 -1.000 sim/cockpit2/controls/yoke_roll_ratio sim/cockpit2/controls/yoke_pitch_ratio Copilot's yoke
+TRIS 12 6
+
+ATTR_manip_drag_axis rotate_small 0.100 0.100 0.000 0.000 1.000 thranda/cockpit/ASIcalib
+TRIS 18 6
+
+ATTR_manip_drag_axis hand 0.000 0.040 0.000 -1.000 4.000 thranda/starter_key1
+TRIS 24 6
+
+ATTR_manip_drag_axis rotate_medium 0.100 0.100 0.000 0.000 2.000 thranda/cockpit/actuators/FuelSwL
+TRIS 30 6
+
+ATTR_manip_none
+
+# XPTO magenta positioning border
+ATTR_draw_enable
+ATTR_no_cull
+ATTR_no_blend
+ATTR_diffuse_rgb 1.0 0.0 1.0
+TRIS 36 24
+ATTR_diffuse_rgb 0.0 0.0 0.0
