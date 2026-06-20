@@ -174,20 +174,36 @@ void HideTestMarker() {
 }
 
 void NudgeTestMarker(MarkerAxis axis, float deltaMeters) {
+    if (axis == MarkerAxis::X) {
+        NudgeTestMarker(deltaMeters, 0.0f, 0.0f);
+    } else if (axis == MarkerAxis::Y) {
+        NudgeTestMarker(0.0f, deltaMeters, 0.0f);
+    } else {
+        NudgeTestMarker(0.0f, 0.0f, deltaMeters);
+    }
+}
+
+void NudgeTestMarker(float dxMeters, float dyMeters, float dzMeters) {
     if (!EnsureInstanceCreated()) {
         return;
     }
 
-    if (axis == MarkerAxis::X) {
-        g_position.x += deltaMeters;
-    } else if (axis == MarkerAxis::Y) {
-        g_position.y += deltaMeters;
-    } else {
-        g_position.z += deltaMeters;
-    }
+    g_position.x += dxMeters;
+    g_position.y += dyMeters;
+    g_position.z += dzMeters;
 
     ApplyPosition();
     LogPosition("nudged");
+}
+
+MarkerState GetTestMarkerState() {
+    MarkerState state;
+    state.visible = g_instance != nullptr;
+    state.hasPosition = g_positionInitialized;
+    state.position.x = g_position.x;
+    state.position.y = g_position.y;
+    state.position.z = g_position.z;
+    return state;
 }
 
 void DestroyTestMarker() {

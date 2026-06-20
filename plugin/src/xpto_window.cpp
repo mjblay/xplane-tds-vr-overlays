@@ -1,21 +1,66 @@
 #include "xpto_window.h"
 
+#include <cstdio>
+
 #include "XPLMDisplay.h"
 #include "XPLMGraphics.h"
+#include "XPLMUtilities.h"
+
+#include "xpto_object_instance.h"
 
 namespace {
 
 struct WindowGeometry {
     int left = 100;
     int top = 700;
-    int right = 480;
-    int bottom = 580;
+    int right = 600;
+    int bottom = 380;
 };
+
+struct ButtonBounds {
+    int left = 0;
+    int top = 0;
+    int right = 0;
+    int bottom = 0;
+};
+
+enum class ButtonAction {
+    None,
+    ShowMarker,
+    HideMarker,
+    XPositive,
+    XNegative,
+    YPositive,
+    YNegative,
+    ZPositive,
+    ZNegative,
+    CycleStep,
+};
+
+struct Button {
+    ButtonBounds bounds;
+    ButtonAction action = ButtonAction::None;
+    const char* label = "";
+};
+
+constexpr int kMaxButtons = 10;
+constexpr float kStepSizes[] = {1.0f, 0.25f, 0.05f, 0.005f, 0.001f};
 
 XPLMWindowID g_window = nullptr;
 WindowGeometry g_lastDesktopGeometry;
 bool g_hasLastDesktopGeometry = false;
 bool g_vrActive = false;
+Button g_buttons[kMaxButtons];
+int g_buttonCount = 0;
+int g_stepIndex = 0;
+
+void Log(const char* message) {
+    XPLMDebugString(message);
+}
+
+float CurrentStepMeters() {
+    return kStepSizes[g_stepIndex];
+}
 
 WindowGeometry DefaultDesktopGeometry() {
     int screenLeft = 0;
@@ -24,8 +69,8 @@ WindowGeometry DefaultDesktopGeometry() {
     int screenBottom = 0;
     XPLMGetScreenBoundsGlobal(&screenLeft, &screenTop, &screenRight, &screenBottom);
 
-    constexpr int windowWidth = 420;
-    constexpr int windowHeight = 140;
+    constexpr int windowWidth = 500;
+    constexpr int windowHeight = 320;
     constexpr int marginLeft = 120;
     constexpr int marginTop = 120;
 
@@ -101,6 +146,118 @@ void ApplyCurrentPositioningMode() {
     ApplyDesktopGeometry();
 }
 
+void AddButton(int left, int top, int width, int height, ButtonAction action, const char* label) {
+    if (g_buttonCount >= kMaxButtons) {
+        return;
+    }
+
+    Button& button = g_buttons[g_buttonCount++];
+    button.bounds.left = left;
+    button.bounds.top = top;
+    button.bounds.right = left + width;
+    button.bounds.bottom = top - height;
+    button.action = action;
+    button.label = label;
+}
+
+void BuildButtons(int left, int top) {
+    g_buttonCount = 0;
+
+    constexpr int buttonWidth = 104;
+    constexpr int buttonHeight = 28;
+    constexpr int gap = 10;
+    const int row1 = top - 132;
+    const int row2 = row1 - buttonHeight - gap;
+    const int row3 = row2 - buttonHeight - gap;
+    const int col1 = left + 16;
+    const int col2 = col1 + buttonWidth + gap;
+    const int col3 = col2 + buttonWidth + gap;
+    const int col4 = col3 + buttonWidth + gap;
+
+    AddButton(col1, row1, buttonWidth, buttonHeight, ButtonAction::ShowMarker, "Show Marker");
+    AddButton(col2, row1, buttonWidth, buttonHeight, ButtonAction::HideMarker, "Hide Marker");
+    AddButton(col3, row1, buttonWidth, buttonHeight, ButtonAction::CycleStep, "Step");
+
+    AddButton(col1, row2, buttonWidth, buttonHeight, ButtonAction::XNegative, "Right/Stbd");
+    AddButton(col2, row2, buttonWidth, buttonHeight, ButtonAction::XPositive, "Left/Port");
+    AddButton(col3, row2, buttonWidth, buttonHeight, ButtonAction::YNegative, "Down");
+    AddButton(col4, row2, buttonWidth, buttonHeight, ButtonAction::YPositive, "Up");
+
+    AddButton(col1, row3, buttonWidth, buttonHeight, ButtonAction::ZNegative, "Aft");
+    AddButton(col2, row3, buttonWidth, buttonHeight, ButtonAction::ZPositive, "Fore");
+}
+
+void DrawButton(const Button& button) {
+    XPLMDrawTranslucentDarkBox(button.bounds.left, button.bounds.top, button.bounds.right, button.bounds.bottom);
+
+    float white[] = {1.0f, 1.0f, 1.0f};
+    char label[64] = {};
+    std::snprintf(label, sizeof(label), "%s", button.label);
+    XPLMDrawString(white, button.bounds.left + 10, button.bounds.top - 19, label, nullptr, xplmFont_Basic);
+}
+
+ButtonAction HitTestButton(int x, int y) {
+    for (int i = 0; i < g_buttonCount; ++i) {
+        const Button& button = g_buttons[i];
+        if (x >= button.bounds.left && x <= button.bounds.right && y <= button.bounds.top && y >= button.bounds.bottom) {
+            return button.action;
+        }
+    }
+
+    return ButtonAction::None;
+}
+
+void LogButtonAction(const char* label) {
+    char buffer[128] = {};
+    std::snprintf(buffer, sizeof(buffer), "XPTO: tuner window button clicked: %s\n", label);
+    Log(buffer);
+}
+
+void ExecuteButtonAction(ButtonAction action) {
+    const float step = CurrentStepMeters();
+
+    switch (action) {
+        case ButtonAction::ShowMarker:
+            LogButtonAction("Show Marker");
+            xpto::ShowTestMarker();
+            break;
+        case ButtonAction::HideMarker:
+            LogButtonAction("Hide Marker");
+            xpto::HideTestMarker();
+            break;
+        case ButtonAction::XPositive:
+            LogButtonAction("X+");
+            xpto::NudgeTestMarker(step, 0.0f, 0.0f);
+            break;
+        case ButtonAction::XNegative:
+            LogButtonAction("X-");
+            xpto::NudgeTestMarker(-step, 0.0f, 0.0f);
+            break;
+        case ButtonAction::YPositive:
+            LogButtonAction("Y+");
+            xpto::NudgeTestMarker(0.0f, step, 0.0f);
+            break;
+        case ButtonAction::YNegative:
+            LogButtonAction("Y-");
+            xpto::NudgeTestMarker(0.0f, -step, 0.0f);
+            break;
+        case ButtonAction::ZPositive:
+            LogButtonAction("Z+");
+            xpto::NudgeTestMarker(0.0f, 0.0f, step);
+            break;
+        case ButtonAction::ZNegative:
+            LogButtonAction("Z-");
+            xpto::NudgeTestMarker(0.0f, 0.0f, -step);
+            break;
+        case ButtonAction::CycleStep:
+            g_stepIndex = (g_stepIndex + 1) % 5;
+            LogButtonAction("Step");
+            break;
+        case ButtonAction::None:
+            break;
+    }
+}
+
 void DrawWindow(XPLMWindowID windowId, void*) {
     int left = 0;
     int top = 0;
@@ -110,22 +267,61 @@ void DrawWindow(XPLMWindowID windowId, void*) {
 
     XPLMDrawTranslucentDarkBox(left, top, right, bottom);
 
+    const xpto::MarkerState markerState = xpto::GetTestMarkerState();
+
     float white[] = {1.0f, 1.0f, 1.0f};
-    char title[] = "XPTO runtime skeleton";
-    char subtitle[] = "No overlay movement implemented";
+    char title[] = "XPTO Runtime Tuner";
+    char subtitle[] = "XPLM instance proof - no overlay movement";
     char desktopMode[] = "Window mode: 2D floating";
     char vrMode[] = "Window mode: VR";
     char* modeText = g_vrActive ? vrMode : desktopMode;
+    char markerText[96] = {};
+    char stepText[64] = {};
+    char positionText[128] = {};
+
+    std::snprintf(markerText, sizeof(markerText), "Marker: %s", markerState.visible ? "shown" : "hidden");
+    const float stepMeters = CurrentStepMeters();
+    if (stepMeters < 0.01f) {
+        std::snprintf(stepText, sizeof(stepText), "Step: %.3f m", stepMeters);
+    } else {
+        std::snprintf(stepText, sizeof(stepText), "Step: %.2f m", stepMeters);
+    }
+    if (markerState.hasPosition) {
+        std::snprintf(
+            positionText,
+            sizeof(positionText),
+            "Marker local XYZ: %.2f, %.2f, %.2f",
+            markerState.position.x,
+            markerState.position.y,
+            markerState.position.z);
+    } else {
+        std::snprintf(positionText, sizeof(positionText), "Marker local XYZ: unavailable");
+    }
 
     XPLMDrawString(white, left + 16, top - 28, title, nullptr, xplmFont_Basic);
     XPLMDrawString(white, left + 16, top - 50, subtitle, nullptr, xplmFont_Basic);
     XPLMDrawString(white, left + 16, top - 72, modeText, nullptr, xplmFont_Basic);
+    XPLMDrawString(white, left + 16, top - 94, markerText, nullptr, xplmFont_Basic);
+    XPLMDrawString(white, left + 150, top - 94, stepText, nullptr, xplmFont_Basic);
+    XPLMDrawString(white, left + 16, top - 116, positionText, nullptr, xplmFont_Basic);
+
+    BuildButtons(left, top);
+    for (int i = 0; i < g_buttonCount; ++i) {
+        DrawButton(g_buttons[i]);
+    }
 }
 
 void HandleKey(XPLMWindowID, char, XPLMKeyFlags, char, void*, int) {
 }
 
-int HandleMouseClick(XPLMWindowID, int, int, XPLMMouseStatus, void*) {
+int HandleMouseClick(XPLMWindowID, int x, int y, XPLMMouseStatus status, void*) {
+    if (status == xplm_MouseDown) {
+        const ButtonAction action = HitTestButton(x, y);
+        if (action != ButtonAction::None) {
+            ExecuteButtonAction(action);
+        }
+    }
+
     return 1;
 }
 
@@ -167,7 +363,7 @@ void CreateRuntimeWindow() {
     }
 
     XPLMSetWindowTitle(g_window, "XPTO Runtime Tuner");
-    XPLMSetWindowResizingLimits(g_window, 320, 100, 800, 400);
+    XPLMSetWindowResizingLimits(g_window, 460, 270, 900, 600);
     ApplyCurrentPositioningMode();
     StoreCurrentDesktopGeometry();
 }
