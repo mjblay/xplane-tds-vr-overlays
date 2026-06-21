@@ -23,21 +23,34 @@ XPLMDataRef g_localY = nullptr;
 XPLMDataRef g_localZ = nullptr;
 XPLMDataRef g_truePsi = nullptr;
 bool g_positionInitialized = false;
+xpto::MarkerPosition g_anchorPosition;
+xpto::MarkerPosition g_bodyOffset;
+xpto::MarkerRotation g_rotationOffset;
+float g_baseHeadingDegrees = 0.0f;
 
 void Log(const char* message) {
     XPLMDebugString(message);
 }
 
-void LogPosition(const char* label) {
-    char buffer[256] = {};
+void LogState(const char* label) {
+    char buffer[512] = {};
     std::snprintf(
         buffer,
         sizeof(buffer),
-        "XPTO: %s marker local position x=%.2f y=%.2f z=%.2f\n",
+        "XPTO: %s marker target=test_marker body_offset x=%.3f y=%.3f z=%.3f rot roll=%.2f pitch=%.2f yaw=%.2f final local x=%.2f y=%.2f z=%.2f pitch=%.2f heading=%.2f roll=%.2f\n",
         label,
+        g_bodyOffset.x,
+        g_bodyOffset.y,
+        g_bodyOffset.z,
+        g_rotationOffset.roll,
+        g_rotationOffset.pitch,
+        g_rotationOffset.yaw,
         g_position.x,
         g_position.y,
-        g_position.z);
+        g_position.z,
+        g_position.pitch,
+        g_position.heading,
+        g_position.roll);
     Log(buffer);
 }
 
@@ -52,22 +65,30 @@ void FindPositionDataRefs() {
     g_truePsi = XPLMFindDataRef("sim/flightmodel/position/true_psi");
 }
 
+void RecomputeDrawInfoFromControlState() {
+    g_position.structSize = sizeof(g_position);
+    g_position.x = g_anchorPosition.x + g_bodyOffset.x;
+    g_position.y = g_anchorPosition.y + g_bodyOffset.y;
+    g_position.z = g_anchorPosition.z + g_bodyOffset.z;
+    g_position.pitch = g_rotationOffset.pitch;
+    g_position.heading = g_baseHeadingDegrees + g_rotationOffset.yaw;
+    g_position.roll = g_rotationOffset.roll;
+}
+
 void InitializePositionNearAircraft() {
     FindPositionDataRefs();
 
     g_position = {};
-    g_position.structSize = sizeof(g_position);
-    g_position.pitch = 0.0f;
-    g_position.heading = 0.0f;
-    g_position.roll = 0.0f;
+    g_bodyOffset = {};
+    g_rotationOffset = {};
+    g_baseHeadingDegrees = 0.0f;
 
     if (g_localX == nullptr || g_localY == nullptr || g_localZ == nullptr) {
         Log("XPTO: local position datarefs unavailable; placing marker at local origin fallback.\n");
-        g_position.x = 0.0f;
-        g_position.y = 0.0f;
-        g_position.z = 0.0f;
+        g_anchorPosition = {};
         g_positionInitialized = true;
-        LogPosition("initialized fallback");
+        RecomputeDrawInfoFromControlState();
+        LogState("initialized fallback");
         return;
     }
 
@@ -88,14 +109,15 @@ void InitializePositionNearAircraft() {
         aircraftHeadingDegrees);
     Log(aircraftBuffer);
 
-    g_position.x = static_cast<float>(aircraftX + std::sin(headingRadians) * kInitialForwardOffsetMeters);
-    g_position.y = static_cast<float>(aircraftY + kInitialUpOffsetMeters);
-    g_position.z = static_cast<float>(aircraftZ - std::cos(headingRadians) * kInitialForwardOffsetMeters);
-    g_position.heading = static_cast<float>(aircraftHeadingDegrees);
+    g_anchorPosition.x = static_cast<float>(aircraftX + std::sin(headingRadians) * kInitialForwardOffsetMeters);
+    g_anchorPosition.y = static_cast<float>(aircraftY + kInitialUpOffsetMeters);
+    g_anchorPosition.z = static_cast<float>(aircraftZ - std::cos(headingRadians) * kInitialForwardOffsetMeters);
+    g_baseHeadingDegrees = static_cast<float>(aircraftHeadingDegrees);
     g_positionInitialized = true;
 
-    Log("XPTO: marker initial offset is 8.0m forward along aircraft true heading and 3.0m above aircraft local position.\n");
-    LogPosition("initialized");
+    Log("XPTO: marker anchor is 8.0m forward along aircraft true heading and 3.0m above aircraft local position. Body offsets start at zero.\n");
+    RecomputeDrawInfoFromControlState();
+    LogState("initialized");
 }
 
 bool EnsureObjectLoaded() {
@@ -140,13 +162,15 @@ bool EnsureInstanceCreated() {
     return true;
 }
 
-void ApplyPosition() {
+void ApplyPosition(const char* label) {
     if (g_instance == nullptr) {
         return;
     }
 
+    RecomputeDrawInfoFromControlState();
     float data[1] = {0.0f};
     XPLMInstanceSetPosition(g_instance, &g_position, data);
+    LogState(label);
 }
 
 }  // namespace
@@ -158,8 +182,7 @@ void ShowTestMarker() {
         return;
     }
 
-    ApplyPosition();
-    LogPosition("shown");
+    ApplyPosition("shown");
 }
 
 void HideTestMarker() {
@@ -188,12 +211,27 @@ void NudgeTestMarker(float dxMeters, float dyMeters, float dzMeters) {
         return;
     }
 
-    g_position.x += dxMeters;
-    g_position.y += dyMeters;
-    g_position.z += dzMeters;
+    g_bodyOffset.x += dxMeters;
+    g_bodyOffset.y += dyMeters;
+    g_bodyOffset.z += dzMeters;
 
-    ApplyPosition();
-    LogPosition("nudged");
+    ApplyPosition("translated");
+}
+
+void RotateTestMarker(MarkerRotationAxis axis, float deltaDegrees) {
+    if (!EnsureInstanceCreated()) {
+        return;
+    }
+
+    if (axis == MarkerRotationAxis::Roll) {
+        g_rotationOffset.roll += deltaDegrees;
+    } else if (axis == MarkerRotationAxis::Pitch) {
+        g_rotationOffset.pitch += deltaDegrees;
+    } else {
+        g_rotationOffset.yaw += deltaDegrees;
+    }
+
+    ApplyPosition("rotated");
 }
 
 MarkerState GetTestMarkerState() {
@@ -203,6 +241,8 @@ MarkerState GetTestMarkerState() {
     state.position.x = g_position.x;
     state.position.y = g_position.y;
     state.position.z = g_position.z;
+    state.bodyOffset = g_bodyOffset;
+    state.rotation = g_rotationOffset;
     return state;
 }
 

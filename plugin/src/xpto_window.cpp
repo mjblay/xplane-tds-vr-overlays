@@ -13,8 +13,8 @@ namespace {
 struct WindowGeometry {
     int left = 100;
     int top = 700;
-    int right = 600;
-    int bottom = 380;
+    int right = 620;
+    int bottom = 270;
 };
 
 struct ButtonBounds {
@@ -34,7 +34,14 @@ enum class ButtonAction {
     YNegative,
     ZPositive,
     ZNegative,
-    CycleStep,
+    CycleMoveStep,
+    CycleRotStep,
+    RollPositive,
+    RollNegative,
+    PitchPositive,
+    PitchNegative,
+    YawPositive,
+    YawNegative,
 };
 
 struct Button {
@@ -43,8 +50,9 @@ struct Button {
     const char* label = "";
 };
 
-constexpr int kMaxButtons = 10;
-constexpr float kStepSizes[] = {1.0f, 0.25f, 0.05f, 0.005f, 0.001f};
+constexpr int kMaxButtons = 18;
+constexpr float kMoveStepSizes[] = {1.0f, 0.25f, 0.05f, 0.005f, 0.001f};
+constexpr float kRotStepSizes[] = {15.0f, 5.0f, 1.0f, 0.1f};
 
 XPLMWindowID g_window = nullptr;
 WindowGeometry g_lastDesktopGeometry;
@@ -52,14 +60,19 @@ bool g_hasLastDesktopGeometry = false;
 bool g_vrActive = false;
 Button g_buttons[kMaxButtons];
 int g_buttonCount = 0;
-int g_stepIndex = 0;
+int g_moveStepIndex = 0;
+int g_rotStepIndex = 0;
 
 void Log(const char* message) {
     XPLMDebugString(message);
 }
 
-float CurrentStepMeters() {
-    return kStepSizes[g_stepIndex];
+float CurrentMoveStepMeters() {
+    return kMoveStepSizes[g_moveStepIndex];
+}
+
+float CurrentRotStepDegrees() {
+    return kRotStepSizes[g_rotStepIndex];
 }
 
 WindowGeometry DefaultDesktopGeometry() {
@@ -69,8 +82,8 @@ WindowGeometry DefaultDesktopGeometry() {
     int screenBottom = 0;
     XPLMGetScreenBoundsGlobal(&screenLeft, &screenTop, &screenRight, &screenBottom);
 
-    constexpr int windowWidth = 500;
-    constexpr int windowHeight = 320;
+    constexpr int windowWidth = 520;
+    constexpr int windowHeight = 430;
     constexpr int marginLeft = 120;
     constexpr int marginTop = 120;
 
@@ -166,9 +179,11 @@ void BuildButtons(int left, int top) {
     constexpr int buttonWidth = 104;
     constexpr int buttonHeight = 28;
     constexpr int gap = 10;
-    const int row1 = top - 132;
+    const int row1 = top - 176;
     const int row2 = row1 - buttonHeight - gap;
     const int row3 = row2 - buttonHeight - gap;
+    const int row4 = row3 - buttonHeight - gap;
+    const int row5 = row4 - buttonHeight - gap;
     const int col1 = left + 16;
     const int col2 = col1 + buttonWidth + gap;
     const int col3 = col2 + buttonWidth + gap;
@@ -176,7 +191,8 @@ void BuildButtons(int left, int top) {
 
     AddButton(col1, row1, buttonWidth, buttonHeight, ButtonAction::ShowMarker, "Show Marker");
     AddButton(col2, row1, buttonWidth, buttonHeight, ButtonAction::HideMarker, "Hide Marker");
-    AddButton(col3, row1, buttonWidth, buttonHeight, ButtonAction::CycleStep, "Step");
+    AddButton(col3, row1, buttonWidth, buttonHeight, ButtonAction::CycleMoveStep, "Move Step");
+    AddButton(col4, row1, buttonWidth, buttonHeight, ButtonAction::CycleRotStep, "Rot Step");
 
     AddButton(col1, row2, buttonWidth, buttonHeight, ButtonAction::XNegative, "Right/Stbd");
     AddButton(col2, row2, buttonWidth, buttonHeight, ButtonAction::XPositive, "Left/Port");
@@ -185,6 +201,14 @@ void BuildButtons(int left, int top) {
 
     AddButton(col1, row3, buttonWidth, buttonHeight, ButtonAction::ZNegative, "Aft");
     AddButton(col2, row3, buttonWidth, buttonHeight, ButtonAction::ZPositive, "Fore");
+
+    AddButton(col1, row4, buttonWidth, buttonHeight, ButtonAction::RollNegative, "Roll -");
+    AddButton(col2, row4, buttonWidth, buttonHeight, ButtonAction::RollPositive, "Roll +");
+    AddButton(col3, row4, buttonWidth, buttonHeight, ButtonAction::PitchNegative, "Pitch -");
+    AddButton(col4, row4, buttonWidth, buttonHeight, ButtonAction::PitchPositive, "Pitch +");
+
+    AddButton(col1, row5, buttonWidth, buttonHeight, ButtonAction::YawNegative, "Yaw -");
+    AddButton(col2, row5, buttonWidth, buttonHeight, ButtonAction::YawPositive, "Yaw +");
 }
 
 void DrawButton(const Button& button) {
@@ -214,7 +238,8 @@ void LogButtonAction(const char* label) {
 }
 
 void ExecuteButtonAction(ButtonAction action) {
-    const float step = CurrentStepMeters();
+    const float moveStep = CurrentMoveStepMeters();
+    const float rotStep = CurrentRotStepDegrees();
 
     switch (action) {
         case ButtonAction::ShowMarker:
@@ -226,32 +251,60 @@ void ExecuteButtonAction(ButtonAction action) {
             xpto::HideTestMarker();
             break;
         case ButtonAction::XPositive:
-            LogButtonAction("X+");
-            xpto::NudgeTestMarker(step, 0.0f, 0.0f);
+            LogButtonAction("Left/Port");
+            xpto::NudgeTestMarker(moveStep, 0.0f, 0.0f);
             break;
         case ButtonAction::XNegative:
-            LogButtonAction("X-");
-            xpto::NudgeTestMarker(-step, 0.0f, 0.0f);
+            LogButtonAction("Right/Stbd");
+            xpto::NudgeTestMarker(-moveStep, 0.0f, 0.0f);
             break;
         case ButtonAction::YPositive:
-            LogButtonAction("Y+");
-            xpto::NudgeTestMarker(0.0f, step, 0.0f);
+            LogButtonAction("Up");
+            xpto::NudgeTestMarker(0.0f, moveStep, 0.0f);
             break;
         case ButtonAction::YNegative:
-            LogButtonAction("Y-");
-            xpto::NudgeTestMarker(0.0f, -step, 0.0f);
+            LogButtonAction("Down");
+            xpto::NudgeTestMarker(0.0f, -moveStep, 0.0f);
             break;
         case ButtonAction::ZPositive:
-            LogButtonAction("Z+");
-            xpto::NudgeTestMarker(0.0f, 0.0f, step);
+            LogButtonAction("Fore");
+            xpto::NudgeTestMarker(0.0f, 0.0f, moveStep);
             break;
         case ButtonAction::ZNegative:
-            LogButtonAction("Z-");
-            xpto::NudgeTestMarker(0.0f, 0.0f, -step);
+            LogButtonAction("Aft");
+            xpto::NudgeTestMarker(0.0f, 0.0f, -moveStep);
             break;
-        case ButtonAction::CycleStep:
-            g_stepIndex = (g_stepIndex + 1) % 5;
-            LogButtonAction("Step");
+        case ButtonAction::CycleMoveStep:
+            g_moveStepIndex = (g_moveStepIndex + 1) % 5;
+            LogButtonAction("Move Step");
+            break;
+        case ButtonAction::CycleRotStep:
+            g_rotStepIndex = (g_rotStepIndex + 1) % 4;
+            LogButtonAction("Rot Step");
+            break;
+        case ButtonAction::RollPositive:
+            LogButtonAction("Roll +");
+            xpto::RotateTestMarker(xpto::MarkerRotationAxis::Roll, rotStep);
+            break;
+        case ButtonAction::RollNegative:
+            LogButtonAction("Roll -");
+            xpto::RotateTestMarker(xpto::MarkerRotationAxis::Roll, -rotStep);
+            break;
+        case ButtonAction::PitchPositive:
+            LogButtonAction("Pitch +");
+            xpto::RotateTestMarker(xpto::MarkerRotationAxis::Pitch, rotStep);
+            break;
+        case ButtonAction::PitchNegative:
+            LogButtonAction("Pitch -");
+            xpto::RotateTestMarker(xpto::MarkerRotationAxis::Pitch, -rotStep);
+            break;
+        case ButtonAction::YawPositive:
+            LogButtonAction("Yaw +");
+            xpto::RotateTestMarker(xpto::MarkerRotationAxis::Yaw, rotStep);
+            break;
+        case ButtonAction::YawNegative:
+            LogButtonAction("Yaw -");
+            xpto::RotateTestMarker(xpto::MarkerRotationAxis::Yaw, -rotStep);
             break;
         case ButtonAction::None:
             break;
@@ -276,34 +329,55 @@ void DrawWindow(XPLMWindowID windowId, void*) {
     char vrMode[] = "Window mode: VR";
     char* modeText = g_vrActive ? vrMode : desktopMode;
     char markerText[96] = {};
-    char stepText[64] = {};
+    char moveStepText[64] = {};
+    char rotStepText[64] = {};
+    char offsetText[128] = {};
+    char rotationText[128] = {};
     char positionText[128] = {};
 
     std::snprintf(markerText, sizeof(markerText), "Marker: %s", markerState.visible ? "shown" : "hidden");
-    const float stepMeters = CurrentStepMeters();
-    if (stepMeters < 0.01f) {
-        std::snprintf(stepText, sizeof(stepText), "Step: %.3f m", stepMeters);
+    const float moveStepMeters = CurrentMoveStepMeters();
+    if (moveStepMeters < 0.01f) {
+        std::snprintf(moveStepText, sizeof(moveStepText), "Move Step: %.3f m", moveStepMeters);
     } else {
-        std::snprintf(stepText, sizeof(stepText), "Step: %.2f m", stepMeters);
+        std::snprintf(moveStepText, sizeof(moveStepText), "Move Step: %.2f m", moveStepMeters);
     }
+    std::snprintf(rotStepText, sizeof(rotStepText), "Rot Step: %.1f deg", CurrentRotStepDegrees());
+    std::snprintf(
+        offsetText,
+        sizeof(offsetText),
+        "Body offset XYZ: %.3f, %.3f, %.3f",
+        markerState.bodyOffset.x,
+        markerState.bodyOffset.y,
+        markerState.bodyOffset.z);
+    std::snprintf(
+        rotationText,
+        sizeof(rotationText),
+        "Rot R/P/Y: %.1f, %.1f, %.1f deg",
+        markerState.rotation.roll,
+        markerState.rotation.pitch,
+        markerState.rotation.yaw);
     if (markerState.hasPosition) {
         std::snprintf(
             positionText,
             sizeof(positionText),
-            "Marker local XYZ: %.2f, %.2f, %.2f",
+            "Final local XYZ: %.2f, %.2f, %.2f",
             markerState.position.x,
             markerState.position.y,
             markerState.position.z);
     } else {
-        std::snprintf(positionText, sizeof(positionText), "Marker local XYZ: unavailable");
+        std::snprintf(positionText, sizeof(positionText), "Final local XYZ: unavailable");
     }
 
     XPLMDrawString(white, left + 16, top - 28, title, nullptr, xplmFont_Basic);
     XPLMDrawString(white, left + 16, top - 50, subtitle, nullptr, xplmFont_Basic);
     XPLMDrawString(white, left + 16, top - 72, modeText, nullptr, xplmFont_Basic);
     XPLMDrawString(white, left + 16, top - 94, markerText, nullptr, xplmFont_Basic);
-    XPLMDrawString(white, left + 150, top - 94, stepText, nullptr, xplmFont_Basic);
-    XPLMDrawString(white, left + 16, top - 116, positionText, nullptr, xplmFont_Basic);
+    XPLMDrawString(white, left + 150, top - 94, moveStepText, nullptr, xplmFont_Basic);
+    XPLMDrawString(white, left + 330, top - 94, rotStepText, nullptr, xplmFont_Basic);
+    XPLMDrawString(white, left + 16, top - 116, offsetText, nullptr, xplmFont_Basic);
+    XPLMDrawString(white, left + 16, top - 138, rotationText, nullptr, xplmFont_Basic);
+    XPLMDrawString(white, left + 16, top - 160, positionText, nullptr, xplmFont_Basic);
 
     BuildButtons(left, top);
     for (int i = 0; i < g_buttonCount; ++i) {
@@ -363,7 +437,7 @@ void CreateRuntimeWindow() {
     }
 
     XPLMSetWindowTitle(g_window, "XPTO Runtime Tuner");
-    XPLMSetWindowResizingLimits(g_window, 460, 270, 900, 600);
+    XPLMSetWindowResizingLimits(g_window, 500, 380, 980, 700);
     ApplyCurrentPositioningMode();
     StoreCurrentDesktopGeometry();
 }
