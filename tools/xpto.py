@@ -23,6 +23,17 @@ class AcfObject:
     heading: float | None = None
     pitch: float | None = None
     roll: float | None = None
+    xyz_field: str | None = None
+    heading_field: str | None = None
+    pitch_field: str | None = None
+    roll_field: str | None = None
+
+
+@dataclass
+class OverlayMatch:
+    acf_path: Path
+    obj: AcfObject
+    target: str
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -175,18 +186,40 @@ def parse_acf_objects(acf_path: Path) -> tuple[dict[int, AcfObject], int | None]
                 obj.obj_flags = int(value)
             except ValueError:
                 pass
+        elif field == "_obj_xyz":
+            values = value.split()
+            if len(values) >= 3:
+                obj.x = parse_float(values[0])
+                obj.y = parse_float(values[1])
+                obj.z = parse_float(values[2])
+                obj.xyz_field = "_obj_xyz"
         elif field == "_v10_att_x_acf_prt_ref":
             obj.x = parse_float(value)
+            obj.xyz_field = obj.xyz_field or "_v10_att_xyz_refs"
         elif field == "_v10_att_y_acf_prt_ref":
             obj.y = parse_float(value)
+            obj.xyz_field = obj.xyz_field or "_v10_att_xyz_refs"
         elif field == "_v10_att_z_acf_prt_ref":
             obj.z = parse_float(value)
+            obj.xyz_field = obj.xyz_field or "_v10_att_xyz_refs"
+        elif field == "_obj_psi":
+            obj.heading = parse_float(value)
+            obj.heading_field = "_obj_psi"
+        elif field == "_obj_the":
+            obj.pitch = parse_float(value)
+            obj.pitch_field = "_obj_the"
+        elif field == "_obj_phi":
+            obj.roll = parse_float(value)
+            obj.roll_field = "_obj_phi"
         elif field == "_v10_att_psi_ref":
             obj.heading = parse_float(value)
+            obj.heading_field = "_v10_att_psi_ref"
         elif field == "_v10_att_the_ref":
             obj.pitch = parse_float(value)
+            obj.pitch_field = "_v10_att_the_ref"
         elif field == "_v10_att_phi_ref":
             obj.roll = parse_float(value)
+            obj.roll_field = "_v10_att_phi_ref"
 
     return objects, object_count
 
@@ -196,6 +229,260 @@ def parse_float(value: str) -> float | None:
         return float(value)
     except ValueError:
         return None
+
+OVERLAY_TARGETS: dict[str, tuple[str, str]] = {
+    "gtn750-u1": ("GTN750 U1 Overlay", "tds_gtn750_screenonly_u1"),
+    "gtn650-u2": ("GTN650 U2 Overlay", "tds_gtn650_screenonly_u2"),
+}
+
+
+def normalize_acf_object_path(path: str) -> str:
+    return path.replace("\\", "/").lower()
+
+
+def target_for_overlay_path(path: str) -> str | None:
+    normalized = normalize_acf_object_path(path)
+    filename = normalized.rsplit("/", 1)[-1]
+
+    if "positioningborder" in filename:
+        return None
+
+    for target, (_, marker) in OVERLAY_TARGETS.items():
+        if marker in filename and filename.endswith(".obj"):
+            return target
+
+    return None
+
+
+def resolve_acf_inputs(aircraft_arg: str, acf_name: str | None = None) -> tuple[Path, list[Path]]:
+    aircraft_path = Path(aircraft_arg)
+
+    if aircraft_path.suffix.lower() == ".acf":
+        if acf_name is not None:
+            raise ValueError("--acf cannot be used when --aircraft points directly at an .acf file.")
+        if not aircraft_path.exists():
+            raise ValueError(f"ACF file not found: {aircraft_path}")
+        return aircraft_path.parent, [aircraft_path]
+
+    if not aircraft_path.exists():
+        raise ValueError(f"Aircraft path not found: {aircraft_path}")
+
+    if not aircraft_path.is_dir():
+        raise ValueError(f"Aircraft path is not a folder or .acf file: {aircraft_path}")
+
+    if acf_name is not None:
+        acf_path = aircraft_path / acf_name
+        if not acf_path.exists():
+            raise ValueError(f"ACF file not found: {acf_path}")
+        return aircraft_path, [acf_path]
+
+    return aircraft_path, find_acf_files(aircraft_path)
+
+
+def find_overlay_matches(acf_paths: list[Path], target: str | None = None) -> list[OverlayMatch]:
+    matches: list[OverlayMatch] = []
+
+    for acf_path in acf_paths:
+        objects, _ = parse_acf_objects(acf_path)
+        for obj in objects.values():
+            if obj.file_stl is None:
+                continue
+
+            matched_target = target_for_overlay_path(obj.file_stl)
+            if matched_target is None:
+                continue
+
+            if target is not None and matched_target != target:
+                continue
+
+            matches.append(OverlayMatch(acf_path=acf_path, obj=obj, target=matched_target))
+
+    return sorted(matches, key=lambda match: (match.acf_path.name, match.obj.index))
+
+
+def format_optional_float(value: float | None) -> str:
+    return "(missing)" if value is None else format_float(value)
+
+
+def print_overlay_match(match: OverlayMatch) -> None:
+    label = OVERLAY_TARGETS[match.target][0]
+    obj = match.obj
+    print(f"  - target: {match.target} ({label})")
+    print(f"    object index: {obj.index}")
+    print(f"    path: {obj.file_stl}")
+    print(f"    _obj_flags: {obj.obj_flags if obj.obj_flags is not None else '(missing)'}")
+    print(f"    _obj_xyz: {format_optional_float(obj.x)}, {format_optional_float(obj.y)}, {format_optional_float(obj.z)} [{obj.xyz_field or 'missing'}]")
+    print(f"    _obj_psi/_obj_the/_obj_phi: {format_optional_float(obj.heading)}, {format_optional_float(obj.pitch)}, {format_optional_float(obj.roll)} [{obj.heading_field or 'missing'}, {obj.pitch_field or 'missing'}, {obj.roll_field or 'missing'}]")
+
+
+def inspect_overlays(args: argparse.Namespace) -> int:
+    try:
+        aircraft_path, acf_paths = resolve_acf_inputs(args.aircraft, getattr(args, "acf", None))
+    except ValueError as exc:
+        print(exc)
+        return 1
+
+    print(f"Aircraft: {aircraft_path}")
+    print()
+
+    if not acf_paths:
+        print("No ACF files found.")
+        return 0
+
+    for acf_path in acf_paths:
+        objects, object_count = parse_acf_objects(acf_path)
+        matches = find_overlay_matches([acf_path])
+        print(f"{acf_path.name}:")
+        print(f"  Parsed object entries: {len(objects)}")
+        print(f"  Declared _obja/count: {object_count}")
+        if not matches:
+            print("  XPTO overlay objects: none found")
+        else:
+            print("  XPTO overlay objects:")
+            for match in matches:
+                print_overlay_match(match)
+        print()
+
+    return 0
+
+
+def unique_overlay_match(acf_paths: list[Path], target: str) -> OverlayMatch:
+    matches = find_overlay_matches(acf_paths, target)
+
+    if not matches:
+        raise ValueError(f"No ACF object entry found for target {target}.")
+
+    if len(matches) > 1:
+        locations = ", ".join(f"{match.acf_path.name}:index {match.obj.index}" for match in matches)
+        raise ValueError(f"Target {target} is ambiguous; matched {len(matches)} entries: {locations}. Use --acf or a direct .acf path.")
+
+    return matches[0]
+
+
+def replace_acf_line(lines: list[str], prefix: str, replacement: str) -> bool:
+    for i, line in enumerate(lines):
+        if line.startswith(prefix):
+            lines[i] = replacement
+            return True
+    return False
+
+
+def patch_overlay_placement_text(
+    acf_text: str,
+    match: OverlayMatch,
+    x: float,
+    y: float,
+    z: float,
+    pitch: float | None = None,
+    yaw: float | None = None,
+    roll: float | None = None,
+) -> str:
+    lines = acf_text.splitlines()
+    index = match.obj.index
+
+    xyz_prefix = f"P _obja/{index}/_obj_xyz "
+    if any(line.startswith(xyz_prefix) for line in lines):
+        replace_acf_line(lines, xyz_prefix, f"P _obja/{index}/_obj_xyz {format_float(x)} {format_float(y)} {format_float(z)}")
+    else:
+        x_prefix = f"P _obja/{index}/_v10_att_x_acf_prt_ref "
+        y_prefix = f"P _obja/{index}/_v10_att_y_acf_prt_ref "
+        z_prefix = f"P _obja/{index}/_v10_att_z_acf_prt_ref "
+        if not all(any(line.startswith(prefix) for line in lines) for prefix in [x_prefix, y_prefix, z_prefix]):
+            raise ValueError(f"Target {match.target} index {index} does not have writable XYZ placement fields.")
+        replace_acf_line(lines, x_prefix, f"P _obja/{index}/_v10_att_x_acf_prt_ref {format_float(x)}")
+        replace_acf_line(lines, y_prefix, f"P _obja/{index}/_v10_att_y_acf_prt_ref {format_float(y)}")
+        replace_acf_line(lines, z_prefix, f"P _obja/{index}/_v10_att_z_acf_prt_ref {format_float(z)}")
+
+    angle_updates = [
+        (yaw, "_obj_psi", "_v10_att_psi_ref", "yaw"),
+        (pitch, "_obj_the", "_v10_att_the_ref", "pitch"),
+        (roll, "_obj_phi", "_v10_att_phi_ref", "roll"),
+    ]
+
+    for value, modern_field, legacy_field, label in angle_updates:
+        if value is None:
+            continue
+
+        modern_prefix = f"P _obja/{index}/{modern_field} "
+        legacy_prefix = f"P _obja/{index}/{legacy_field} "
+        if any(line.startswith(modern_prefix) for line in lines):
+            replace_acf_line(lines, modern_prefix, f"P _obja/{index}/{modern_field} {format_float(value)}")
+        elif any(line.startswith(legacy_prefix) for line in lines):
+            replace_acf_line(lines, legacy_prefix, f"P _obja/{index}/{legacy_field} {format_float(value)}")
+        else:
+            raise ValueError(f"Target {match.target} index {index} does not have a writable {label} field.")
+
+    return "\n".join(lines) + "\n"
+
+
+def set_overlay_placement(args: argparse.Namespace) -> int:
+    if args.target not in OVERLAY_TARGETS:
+        print(f"Unknown target: {args.target}")
+        print("Available targets:")
+        for target in OVERLAY_TARGETS:
+            print(f"  - {target}")
+        return 1
+
+    try:
+        aircraft_path, acf_paths = resolve_acf_inputs(args.aircraft, getattr(args, "acf", None))
+        match = unique_overlay_match(acf_paths, args.target)
+    except ValueError as exc:
+        print(exc)
+        return 1
+
+    print(f"Selected overlay in {match.acf_path.name}:")
+    print_overlay_match(match)
+    print()
+
+    try:
+        acf_text = match.acf_path.read_text(encoding="utf-8", errors="replace")
+        patched_text = patch_overlay_placement_text(
+            acf_text,
+            match,
+            x=args.x,
+            y=args.y,
+            z=args.z,
+            pitch=args.pitch,
+            yaw=args.yaw,
+            roll=args.roll,
+        )
+    except ValueError as exc:
+        print(exc)
+        return 1
+
+    print("Requested placement:")
+    print(f"  x/y/z: {format_float(args.x)}, {format_float(args.y)}, {format_float(args.z)}")
+    if args.yaw is not None:
+        print(f"  yaw/_obj_psi: {format_float(args.yaw)}")
+    if args.pitch is not None:
+        print(f"  pitch/_obj_the: {format_float(args.pitch)}")
+    if args.roll is not None:
+        print(f"  roll/_obj_phi: {format_float(args.roll)}")
+    print()
+
+    if not args.apply:
+        print("DRY RUN: no files were modified. Add --apply and --backup-root to write this placement.")
+        return 0
+
+    try:
+        backup_root = resolve_backup_root(args, aircraft_path)
+    except ValueError as exc:
+        print(exc)
+        return 1
+
+    backup_error = validate_external_backup_root(aircraft_path, backup_root)
+    if backup_error is not None:
+        print(backup_error)
+        return 1
+
+    backup_dir = ensure_backup_dir(aircraft_path, {"backup_policy": {"include_timestamp": True}}, backup_root)
+    backed_up_to = backup_file(match.acf_path, backup_dir, aircraft_path)
+    match.acf_path.write_text(patched_text, encoding="utf-8", newline="\n")
+
+    print(f"Backed up ACF: {match.acf_path} -> {backed_up_to}")
+    print(f"Updated ACF placement: {match.acf_path}")
+    print("Reload the aircraft in X-Plane to see the edited aircraft-attached overlay placement.")
+    return 0
 
 
 def inspect_aircraft(args: argparse.Namespace) -> int:
@@ -699,6 +986,26 @@ def build_parser() -> argparse.ArgumentParser:
     inspect_parser.add_argument("aircraft", help="Path to aircraft folder.")
     inspect_parser.set_defaults(func=inspect_aircraft)
 
+
+    inspect_overlays_parser = subparsers.add_parser("inspect-overlays", help="Inspect XPTO-installed overlay object placement in ACF files.")
+    inspect_overlays_parser.add_argument("--aircraft", required=True, help="Path to aircraft folder or a prepared .acf file.")
+    inspect_overlays_parser.add_argument("--acf", help="Optional ACF filename inside the aircraft folder.")
+    inspect_overlays_parser.set_defaults(func=inspect_overlays)
+
+    set_overlay_parser = subparsers.add_parser("set-overlay-placement", help="Edit placement for one XPTO-installed aircraft-attached overlay object.")
+    set_overlay_parser.add_argument("--aircraft", required=True, help="Path to aircraft folder or a prepared .acf file.")
+    set_overlay_parser.add_argument("--acf", help="Optional ACF filename inside the aircraft folder, used to disambiguate multi-ACF aircraft.")
+    set_overlay_parser.add_argument("--target", required=True, choices=sorted(OVERLAY_TARGETS), help="Overlay target to edit.")
+    set_overlay_parser.add_argument("--x", required=True, type=float, help="ACF object X placement value.")
+    set_overlay_parser.add_argument("--y", required=True, type=float, help="ACF object Y placement value.")
+    set_overlay_parser.add_argument("--z", required=True, type=float, help="ACF object Z placement value.")
+    set_overlay_parser.add_argument("--pitch", type=float, help="Optional pitch/_obj_the value. Only updates existing ACF angle fields.")
+    set_overlay_parser.add_argument("--yaw", type=float, help="Optional yaw/_obj_psi value. Only updates existing ACF angle fields.")
+    set_overlay_parser.add_argument("--roll", type=float, help="Optional roll/_obj_phi value. Only updates existing ACF angle fields.")
+    set_overlay_parser.add_argument("--apply", action="store_true", help="Write the edited ACF after creating an external backup.")
+    set_overlay_parser.add_argument("--backup-root", help="Required with --apply. External backup root outside the aircraft and X-Plane folders.")
+    set_overlay_parser.set_defaults(func=set_overlay_placement)
+
     plan_parser = subparsers.add_parser("plan-install", help="Plan an overlay install without modifying files.")
     plan_parser.add_argument("--aircraft", required=True, help="Path to aircraft folder.")
     plan_parser.add_argument("--profile", required=True, help="Profile ID, such as thranda-f33a or pae-a36.")
@@ -738,3 +1045,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

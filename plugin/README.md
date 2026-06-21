@@ -9,7 +9,7 @@ The skeleton only:
 - adds `Show Runtime Tuner`
 - adds test marker instance proof menu actions
 - toggles a basic modern XPLM window titled `XPTO Runtime Tuner`
-- draws clickable marker controls inside the runtime tuner window
+- draws clickable translation and rotation controls inside the runtime tuner window
 - uses 2D floating window positioning outside VR and `xplm_WindowVR` while VR is active
 - loads an original project-created test OBJ and moves it as an XPLM instance
 
@@ -83,7 +83,7 @@ Start X-Plane in 2D and open:
 Plugins > XPTO > Show Runtime Tuner
 ```
 
-The menu item toggles the `XPTO Runtime Tuner` window. In 2D, the window uses normal floating positioning and shows marker status, current step size, marker local XYZ if known, and clickable controls.
+The menu item toggles the `XPTO Runtime Tuner` window. In 2D, the window uses normal floating positioning and shows marker status, move step, rotation step, body offset XYZ, Roll/Pitch/Yaw rotation, final local XYZ if known, and clickable controls.
 
 Validate the 2D window behavior:
 
@@ -99,7 +99,10 @@ Validate the clickable marker controls in 2D:
 - Click `Show Marker` in the XPTO Runtime Tuner window.
 - Confirm the window status changes to `Marker: shown` and local XYZ values appear.
 - Click `Left/Port`, `Right/Stbd`, `Up`, `Down`, `Fore`, and `Aft`; confirm the marker moves and the XYZ display updates.
-- Click `Step` to cycle through `1.00 m`, `0.25 m`, `0.05 m`, `0.005 m`, and `0.001 m`; confirm nudges use the selected step, including the 5 mm and 1 mm fine steps.
+- Click `Move Step` to cycle through `1.00 m`, `0.25 m`, `0.05 m`, `0.005 m`, and `0.001 m`; confirm nudges use the selected step, including the 5 mm and 1 mm fine steps.
+- Click `Rot Step` to cycle through `15 deg`, `5 deg`, `1 deg`, and `0.1 deg`.
+- Click `Roll +`, `Roll -`, `Pitch +`, `Pitch -`, `Yaw +`, and `Yaw -`; confirm the marker rotates and the Roll/Pitch/Yaw display updates.
+- Check `Log.txt` for `XPTO:` rotation messages showing target, body offset, Roll/Pitch/Yaw offsets, and final `XPLMDrawInfo_t` values sent to X-Plane.
 - Click `Hide Marker`; confirm the marker disappears and status changes to `Marker: hidden`.
 
 Validate VR behavior:
@@ -107,10 +110,10 @@ Validate VR behavior:
 - Enter VR.
 - Select `Plugins > XPTO > Show Runtime Tuner`.
 - The same runtime tuner window should appear in the headset using `xplm_WindowVR` and show `Window mode: VR`.
-- Use `Show Marker`, pilot-friendly nudge buttons, `Step`, and `Hide Marker` from the VR window.
+- Use `Show Marker`, pilot-friendly nudge buttons, rotation buttons, `Move Step`, `Rot Step`, and `Hide Marker` from the VR window.
 - Exit VR and show the window again; it should return to normal 2D floating behavior without losing the stored 2D position.
 
-The plugin should not create duplicate runtime tuner windows or duplicate marker instances. Position and step tracking are session-local only; they are not written to disk.
+The plugin should not create duplicate runtime tuner windows or duplicate marker instances. Position, rotation, and step tracking are session-local only; they are not written to disk.
 
 ## Test Marker Instance Validation
 
@@ -141,7 +144,7 @@ Plugins > XPTO > Nudge Test Marker +Z
 Plugins > XPTO > Nudge Test Marker -Z
 ```
 
-Direction mapping for the tuner buttons:
+Direction mapping for the tuner translation buttons:
 
 - `Left/Port` = positive local X, formerly `X+`.
 - `Right/Stbd` = negative local X, formerly `X-`.
@@ -150,12 +153,22 @@ Direction mapping for the tuner buttons:
 - `Fore` = positive local Z, formerly `Z+`.
 - `Aft` = negative local Z, formerly `Z-`.
 
-Coordinate frame for this proof:
+Rotation mapping for the tuner buttons:
+
+- `Roll +` / `Roll -` change the proof target roll offset, intended as rotation around the aircraft longitudinal axis.
+- `Pitch +` / `Pitch -` change the proof target pitch offset, intended as rotation around the aircraft lateral axis.
+- `Yaw +` / `Yaw -` change the proof target yaw offset, intended as rotation around the aircraft vertical axis.
+- Rotation offsets are stored as body-relative Euler offsets in degrees for this proof.
+- The current implementation sends `pitch = pitch_offset`, `heading = aircraft_true_heading + yaw_offset`, and `roll = roll_offset` through `XPLMDrawInfo_t`.
+- Final sign conventions may be refined during actual overlay placement.
+
+Coordinate/orientation frame for this proof:
 
 - The instance uses X-Plane local/world coordinates through `XPLMInstanceSetPosition` and `XPLMDrawInfo_t`.
 - Initial placement is seeded from `sim/flightmodel/position/local_x`, `local_y`, `local_z`, and `true_psi`.
 - The marker starts at aircraft local position plus 8 meters forward along true heading and 3 meters up.
-- Nudges directly change local X/Y/Z. This is not aircraft-attached ACF coordinates and not aircraft-relative cockpit placement yet.
+- Nudges directly change proof body offset X/Y/Z, currently applied directly to X-Plane local/world X/Y/Z. This is not aircraft-attached ACF coordinates and not aircraft-relative cockpit placement yet.
+- Rotation buttons immediately update the marker instance with `XPLMInstanceSetPosition`.
 
 Known unknowns:
 
@@ -167,4 +180,4 @@ Limitations:
 
 - Buttons are simple custom-drawn rectangles using XPLM window mouse callbacks, not a full widget toolkit.
 - The cursor remains the default pointer over buttons.
-- Step size and marker position are session-local only.
+- Move step, rotation step, marker position, and marker rotation are session-local only.
