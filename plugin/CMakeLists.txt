@@ -60,8 +60,13 @@ if(WIN32)
 endif()
 
 add_custom_command(TARGET xpto_overlay_tuner POST_BUILD
-    COMMAND "${CMAKE_COMMAND}" -E copy_directory
-        "${CMAKE_CURRENT_SOURCE_DIR}/assets"
+    COMMAND "${CMAKE_COMMAND}" -E remove_directory
         "$<TARGET_FILE_DIR:xpto_overlay_tuner>/../assets"
-    COMMENT "Staging XPTO plugin assets"
+    COMMAND "${CMAKE_COMMAND}" -E make_directory
+        "$<TARGET_FILE_DIR:xpto_overlay_tuner>/../assets"
+    COMMAND "${CMAKE_COMMAND}" -E copy
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/xpto_gtn750_proxy.obj"
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/xpto_gtn650_proxy.obj"
+        "$<TARGET_FILE_DIR:xpto_overlay_tuner>/../assets"
+    COMMENT "Staging XPTO plugin proxy assets"
 )

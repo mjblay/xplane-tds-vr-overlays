@@ -9,20 +9,13 @@
 
 namespace {
 
-constexpr float kNudgeMeters = 1.0f;
-
 XPLMMenuID g_menu = nullptr;
 
 enum class MenuAction : intptr_t {
     ShowRuntimeTuner = 1,
-    ShowTestMarker,
-    HideTestMarker,
-    NudgeXPositive,
-    NudgeXNegative,
-    NudgeYPositive,
-    NudgeYNegative,
-    NudgeZPositive,
-    NudgeZNegative,
+    ShowSelectedProxy,
+    HideSelectedProxy,
+    ExportPlacement,
 };
 
 void AppendActionItem(const char* label, MenuAction action) {
@@ -36,29 +29,14 @@ void MenuHandler(void*, void* itemRef) {
         case MenuAction::ShowRuntimeTuner:
             xpto::ToggleRuntimeWindow();
             break;
-        case MenuAction::ShowTestMarker:
-            xpto::ShowTestMarker();
+        case MenuAction::ShowSelectedProxy:
+            xpto::ShowSelectedProxy();
             break;
-        case MenuAction::HideTestMarker:
-            xpto::HideTestMarker();
+        case MenuAction::HideSelectedProxy:
+            xpto::HideSelectedProxy();
             break;
-        case MenuAction::NudgeXPositive:
-            xpto::NudgeTestMarker(xpto::MarkerAxis::X, kNudgeMeters);
-            break;
-        case MenuAction::NudgeXNegative:
-            xpto::NudgeTestMarker(xpto::MarkerAxis::X, -kNudgeMeters);
-            break;
-        case MenuAction::NudgeYPositive:
-            xpto::NudgeTestMarker(xpto::MarkerAxis::Y, kNudgeMeters);
-            break;
-        case MenuAction::NudgeYNegative:
-            xpto::NudgeTestMarker(xpto::MarkerAxis::Y, -kNudgeMeters);
-            break;
-        case MenuAction::NudgeZPositive:
-            xpto::NudgeTestMarker(xpto::MarkerAxis::Z, kNudgeMeters);
-            break;
-        case MenuAction::NudgeZNegative:
-            xpto::NudgeTestMarker(xpto::MarkerAxis::Z, -kNudgeMeters);
+        case MenuAction::ExportPlacement:
+            xpto::ExportSelectedProxyPlacement();
             break;
     }
 }
@@ -85,14 +63,9 @@ bool CreateMenu() {
 
     AppendActionItem("Show Runtime Tuner", MenuAction::ShowRuntimeTuner);
     XPLMAppendMenuSeparator(g_menu);
-    AppendActionItem("Show Test Marker", MenuAction::ShowTestMarker);
-    AppendActionItem("Hide Test Marker", MenuAction::HideTestMarker);
-    AppendActionItem("Nudge Test Marker +X", MenuAction::NudgeXPositive);
-    AppendActionItem("Nudge Test Marker -X", MenuAction::NudgeXNegative);
-    AppendActionItem("Nudge Test Marker +Y", MenuAction::NudgeYPositive);
-    AppendActionItem("Nudge Test Marker -Y", MenuAction::NudgeYNegative);
-    AppendActionItem("Nudge Test Marker +Z", MenuAction::NudgeZPositive);
-    AppendActionItem("Nudge Test Marker -Z", MenuAction::NudgeZNegative);
+    AppendActionItem("Show Selected Proxy", MenuAction::ShowSelectedProxy);
+    AppendActionItem("Hide Selected Proxy", MenuAction::HideSelectedProxy);
+    AppendActionItem("Export Placement", MenuAction::ExportPlacement);
     return true;
 }
 

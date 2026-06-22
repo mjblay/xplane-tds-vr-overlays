@@ -1,183 +1,104 @@
-# XPTO Runtime Plugin Skeleton
+# XPTO Runtime Placement Proxy
 
-This folder contains the minimal native X-Plane plugin skeleton for the XPTO runtime overlay tuner.
+This plugin is a developer-only calibration tool. It is not part of the intended public release path.
 
-The skeleton only:
+Public release should remain the installer/profile/overlay-object workflow with correctly placed aircraft-attached overlays. The runtime proxy exists only to help developers measure candidate placement values.
 
-- registers the XPTO plugin lifecycle callbacks
-- adds an `XPTO` submenu under X-Plane's Plugins menu
-- adds `Show Runtime Tuner`
-- adds test marker instance proof menu actions
-- toggles a basic modern XPLM window titled `XPTO Runtime Tuner`
-- draws clickable translation and rotation controls inside the runtime tuner window
-- uses 2D floating window positioning outside VR and `xplm_WindowVR` while VR is active
-- loads an original project-created test OBJ and moves it as an XPLM instance
+The important project finding is fixed in the design: plugin-created XPLM instances can move visible geometry, but plugin-created instances of the real TDS screen-only overlay OBJs rendered as black/static rectangles and did not provide live GTN content or input. The working TDS overlays are aircraft-attached ACF objects installed by the offline installer.
 
-It does not load XPTO/TDS overlay OBJ files, move overlays, edit aircraft files, or modify installer behavior.
+Therefore this plugin does not create plugin-owned TDS overlay instances. It creates only a visible measuring proxy.
 
-## Requirements
+## Current Scope
 
-- X-Plane SDK extracted outside this repository
-- CMake 3.20 or newer
-- Windows: Visual Studio 2022 Build Tools or Visual Studio with Desktop development with C++
+The plugin currently:
 
-Set `XPLANE_SDK_ROOT` to the extracted SDK root containing:
+- opens the `XPTO Runtime Tuner` window
+- creates project-owned proxy OBJ instances only
+- cycles targets:
+  - `GTN750 U1`
+  - `GTN650 U2`
+- initializes proxy placement from F33A ACF candidate defaults
+- moves, rotates, and resizes the selected proxy in real time
+- stores developer calibration records in `Resources/plugins/XPTO/config/xpto-proxy-calibrations.json`
+- exports corrected ACF candidate placement JSON to `Resources/plugins/XPTO/exports/xpto-placement-export.json`
+- converts ACF/body-frame placement into X-Plane local coordinates only for rendering
 
-```text
-CHeaders/
-Libraries/
-```
+It does not edit aircraft files, modify installer behavior, load TDS overlay OBJs as plugin instances, or write ACF placement directly.
 
-For example:
+## F33A Defaults
 
-```text
-D:\xplane-dev\sdk\XPSDK\SDK
-```
-
-The Windows build expects:
+Resetting a proxy restores these ACF candidate placement values:
 
 ```text
-%XPLANE_SDK_ROOT%\CHeaders\XPLM
-%XPLANE_SDK_ROOT%\CHeaders\Widgets
-%XPLANE_SDK_ROOT%\Libraries\Win\XPLM_64.lib
+GTN750 U1: x=1.360000014 y=0.899999976 z=-1.350000024 pitch=0 yaw=0 roll=0
+GTN650 U2: x=1.360000014 y=0.300000012 z=-1.350000024 pitch=0 yaw=0 roll=0
 ```
-
-`XPWidgets_64.lib` is not linked because this skeleton uses modern XPLM windows, not XPWidgets.
 
 ## Build
-
-From the repository root:
 
 ```powershell
 cmake -S plugin -B build\plugin -DXPLANE_SDK_ROOT="D:\xplane-dev\sdk\XPSDK\SDK"
 cmake --build build\plugin --config Release
 ```
 
-The Windows build stages a copyable plugin layout:
+The Windows build stages:
 
 ```text
 build\plugin\XPTO\win_x64\XPTO.xpl
-build\plugin\XPTO\assets\xpto_test_marker.obj
+build\plugin\XPTO\assets\xpto_gtn750_proxy.obj
+build\plugin\XPTO\assets\xpto_gtn650_proxy.obj
 ```
 
-## Manual Install
+## Developer Workflow
 
-Copy the staged `XPTO` folder to:
+1. Run `py tools\xpto.py inspect-overlays --aircraft "<aircraft path>"` to inspect the current real ACF-attached overlay placement.
+2. Seed or edit `Resources/plugins/XPTO/config/xpto-proxy-calibrations.json` with the current baseline if needed.
+3. Open X-Plane with the prepared aircraft.
+4. Open `Plugins > XPTO > Show Runtime Tuner`.
+5. Click `Target` to choose `GTN750 U1` or `GTN650 U2`.
+6. Click `Show Proxy`.
+7. Move, rotate, and resize the proxy until it visually matches the current real overlay/native screen.
+8. Click `Calibrate Here` to save the aircraft/target calibration record.
+9. Move the proxy to the desired new placement and click `Export`.
+10. Apply the exported corrected ACF candidate values to the real aircraft-attached ACF overlay object with the CLI.
+11. Reload the aircraft in X-Plane.
+
+The calibration file is developer-owned and safe to edit manually:
 
 ```text
-X-Plane 12\Resources\plugins\XPTO
+X-Plane 12\Resources\plugins\XPTO\config\xpto-proxy-calibrations.json
 ```
 
-Expected installed layout:
+Each record is keyed by aircraft folder, ACF filename, optional profile id, and target id. A record includes `acf_baseline_placement`, `proxy_source_at_visual_match`, `calibration_offset`, size, timestamp, and notes. `Calibrate Here` computes `calibration_offset = acf_baseline_placement - proxy_source_at_visual_match`.
+
+The export file is:
 
 ```text
-X-Plane 12\Resources\plugins\XPTO\win_x64\XPTO.xpl
-X-Plane 12\Resources\plugins\XPTO\assets\xpto_test_marker.obj
+X-Plane 12\Resources\plugins\XPTO\exports\xpto-placement-export.json
 ```
 
-## Runtime Tuner Window Validation
+The JSON `proxy_source_placement` object is the raw developer jig source. When calibrated, the JSON `placement` object is corrected with `proxy_source_placement + calibration_offset` and is intended as the ACF candidate placement. If not calibrated, the export includes `calibrated=false` and a warning; `placement` then equals the raw proxy source. `debug_final_local` is only the rendered X-Plane local/world position.
 
-Start X-Plane in 2D and open:
+## Controls
+
+Movement modifies only ACF candidate x/y/z and does not depend on proxy rotation:
 
 ```text
-Plugins > XPTO > Show Runtime Tuner
+Left / Port       = +X
+Right / Starboard = -X
+Up                = +Y
+Down              = -Y
+Fore              = +Z
+Aft               = -Z
 ```
 
-The menu item toggles the `XPTO Runtime Tuner` window. In 2D, the window uses normal floating positioning and shows marker status, move step, rotation step, body offset XYZ, Roll/Pitch/Yaw rotation, final local XYZ if known, and clickable controls.
+Rotation modifies only pitch/yaw/roll. Resize modifies only proxy width/height. `Reset Proxy` restores the saved visual-match source when calibrated, or the seeded/current baseline when not calibrated. `Clear Cal` marks the selected aircraft/target record uncalibrated without editing any aircraft file.
 
-Validate the 2D window behavior:
-
-- Select `Show Runtime Tuner`; the window appears in a sane 2D position.
-- Move the window to a different visible 2D position.
-- Select `Show Runtime Tuner` again; the window hides.
-- Select `Show Runtime Tuner`; the same window reappears at the moved position.
-- Move the window again, then close it using its X-Plane window decoration/red close button.
-- Select `Show Runtime Tuner`; the window should reopen on the first click at the last moved position.
-
-Validate the clickable marker controls in 2D:
-
-- Click `Show Marker` in the XPTO Runtime Tuner window.
-- Confirm the window status changes to `Marker: shown` and local XYZ values appear.
-- Click `Left/Port`, `Right/Stbd`, `Up`, `Down`, `Fore`, and `Aft`; confirm the marker moves and the XYZ display updates.
-- Click `Move Step` to cycle through `1.00 m`, `0.25 m`, `0.05 m`, `0.005 m`, and `0.001 m`; confirm nudges use the selected step, including the 5 mm and 1 mm fine steps.
-- Click `Rot Step` to cycle through `15 deg`, `5 deg`, `1 deg`, and `0.1 deg`.
-- Click `Roll +`, `Roll -`, `Pitch +`, `Pitch -`, `Yaw +`, and `Yaw -`; confirm the marker rotates and the Roll/Pitch/Yaw display updates.
-- Check `Log.txt` for `XPTO:` rotation messages showing target, body offset, Roll/Pitch/Yaw offsets, and final `XPLMDrawInfo_t` values sent to X-Plane.
-- Click `Hide Marker`; confirm the marker disappears and status changes to `Marker: hidden`.
-
-Validate VR behavior:
-
-- Enter VR.
-- Select `Plugins > XPTO > Show Runtime Tuner`.
-- The same runtime tuner window should appear in the headset using `xplm_WindowVR` and show `Window mode: VR`.
-- Use `Show Marker`, pilot-friendly nudge buttons, rotation buttons, `Move Step`, `Rot Step`, and `Hide Marker` from the VR window.
-- Exit VR and show the window again; it should return to normal 2D floating behavior without losing the stored 2D position.
-
-The plugin should not create duplicate runtime tuner windows or duplicate marker instances. Position, rotation, and step tracking are session-local only; they are not written to disk.
-
-## Test Marker Instance Validation
-
-This is an XPLM instance proof only. It does not test TDS screen rendering, cockpit-device attributes, manipulator attributes, or aircraft-attached overlay behavior.
-
-The test marker is an original project-created OBJ at:
+The base proxy dimensions match the current screen-only overlay quads:
 
 ```text
-XPTO\assets\xpto_test_marker.obj
+GTN750: half-size x=0.0661, y=0.0750
+GTN650: half-size x=0.0661, y=0.0330
 ```
 
-It is loaded by the plugin with this X-Plane-relative path:
-
-```text
-Resources/plugins/XPTO/assets/xpto_test_marker.obj
-```
-
-Menu items remain available for quick testing:
-
-```text
-Plugins > XPTO > Show Test Marker
-Plugins > XPTO > Hide Test Marker
-Plugins > XPTO > Nudge Test Marker +X
-Plugins > XPTO > Nudge Test Marker -X
-Plugins > XPTO > Nudge Test Marker +Y
-Plugins > XPTO > Nudge Test Marker -Y
-Plugins > XPTO > Nudge Test Marker +Z
-Plugins > XPTO > Nudge Test Marker -Z
-```
-
-Direction mapping for the tuner translation buttons:
-
-- `Left/Port` = positive local X, formerly `X+`.
-- `Right/Stbd` = negative local X, formerly `X-`.
-- `Up` = positive local Y, formerly `Y+`.
-- `Down` = negative local Y, formerly `Y-`.
-- `Fore` = positive local Z, formerly `Z+`.
-- `Aft` = negative local Z, formerly `Z-`.
-
-Rotation mapping for the tuner buttons:
-
-- `Roll +` / `Roll -` change the proof target roll offset, intended as rotation around the aircraft longitudinal axis.
-- `Pitch +` / `Pitch -` change the proof target pitch offset, intended as rotation around the aircraft lateral axis.
-- `Yaw +` / `Yaw -` change the proof target yaw offset, intended as rotation around the aircraft vertical axis.
-- Rotation offsets are stored as body-relative Euler offsets in degrees for this proof.
-- The current implementation sends `pitch = pitch_offset`, `heading = aircraft_true_heading + yaw_offset`, and `roll = roll_offset` through `XPLMDrawInfo_t`.
-- Final sign conventions may be refined during actual overlay placement.
-
-Coordinate/orientation frame for this proof:
-
-- The instance uses X-Plane local/world coordinates through `XPLMInstanceSetPosition` and `XPLMDrawInfo_t`.
-- Initial placement is seeded from `sim/flightmodel/position/local_x`, `local_y`, `local_z`, and `true_psi`.
-- The marker starts at aircraft local position plus 8 meters forward along true heading and 3 meters up.
-- Nudges directly change proof body offset X/Y/Z, currently applied directly to X-Plane local/world X/Y/Z. This is not aircraft-attached ACF coordinates and not aircraft-relative cockpit placement yet.
-- Rotation buttons immediately update the marker instance with `XPLMInstanceSetPosition`.
-
-Known unknowns:
-
-- This does not prove that plugin-created instances can support `ATTR_cockpit_device` or `ATTR_manip_device`.
-- Aircraft-relative cockpit placement will need conversion from aircraft pose/orientation to X-Plane local coordinates, likely every frame or whenever the aircraft moves.
-- This first marker may still appear differently in 2D and VR depending on view, culling, and where the local offset lands relative to the camera.
-
-Limitations:
-
-- Buttons are simple custom-drawn rectangles using XPLM window mouse callbacks, not a full widget toolkit.
-- The cursor remains the default pointer over buttons.
-- Move step, rotation step, marker position, and marker rotation are session-local only.
+The proxy is a dark rectangle with a bright magenta border. It is only a measuring jig and is not the final overlay.

@@ -12,9 +12,9 @@ namespace {
 
 struct WindowGeometry {
     int left = 100;
-    int top = 700;
-    int right = 620;
-    int bottom = 270;
+    int top = 760;
+    int right = 660;
+    int bottom = 210;
 };
 
 struct ButtonBounds {
@@ -26,8 +26,13 @@ struct ButtonBounds {
 
 enum class ButtonAction {
     None,
-    ShowMarker,
-    HideMarker,
+    CycleTarget,
+    ShowProxy,
+    HideProxy,
+    ExportPlacement,
+    ResetProxy,
+    CalibrateHere,
+    ClearCalibration,
     XPositive,
     XNegative,
     YPositive,
@@ -36,12 +41,17 @@ enum class ButtonAction {
     ZNegative,
     CycleMoveStep,
     CycleRotStep,
+    CycleSizeStep,
     RollPositive,
     RollNegative,
     PitchPositive,
     PitchNegative,
     YawPositive,
     YawNegative,
+    WidthPositive,
+    WidthNegative,
+    HeightPositive,
+    HeightNegative,
 };
 
 struct Button {
@@ -50,9 +60,10 @@ struct Button {
     const char* label = "";
 };
 
-constexpr int kMaxButtons = 18;
+constexpr int kMaxButtons = 32;
 constexpr float kMoveStepSizes[] = {1.0f, 0.25f, 0.05f, 0.005f, 0.001f};
 constexpr float kRotStepSizes[] = {15.0f, 5.0f, 1.0f, 0.1f};
+constexpr float kSizeStepSizes[] = {0.05f, 0.01f, 0.005f, 0.001f};
 
 XPLMWindowID g_window = nullptr;
 WindowGeometry g_lastDesktopGeometry;
@@ -62,6 +73,7 @@ Button g_buttons[kMaxButtons];
 int g_buttonCount = 0;
 int g_moveStepIndex = 0;
 int g_rotStepIndex = 0;
+int g_sizeStepIndex = 0;
 
 void Log(const char* message) {
     XPLMDebugString(message);
@@ -75,6 +87,10 @@ float CurrentRotStepDegrees() {
     return kRotStepSizes[g_rotStepIndex];
 }
 
+float CurrentSizeStepMeters() {
+    return kSizeStepSizes[g_sizeStepIndex];
+}
+
 WindowGeometry DefaultDesktopGeometry() {
     int screenLeft = 0;
     int screenTop = 900;
@@ -82,10 +98,10 @@ WindowGeometry DefaultDesktopGeometry() {
     int screenBottom = 0;
     XPLMGetScreenBoundsGlobal(&screenLeft, &screenTop, &screenRight, &screenBottom);
 
-    constexpr int windowWidth = 520;
-    constexpr int windowHeight = 430;
+    constexpr int windowWidth = 560;
+    constexpr int windowHeight = 660;
     constexpr int marginLeft = 120;
-    constexpr int marginTop = 120;
+    constexpr int marginTop = 100;
 
     WindowGeometry geometry;
     geometry.left = screenLeft + marginLeft;
@@ -176,39 +192,53 @@ void AddButton(int left, int top, int width, int height, ButtonAction action, co
 void BuildButtons(int left, int top) {
     g_buttonCount = 0;
 
-    constexpr int buttonWidth = 104;
+    constexpr int buttonWidth = 124;
     constexpr int buttonHeight = 28;
-    constexpr int gap = 10;
-    const int row1 = top - 176;
+    constexpr int gap = 8;
+    const int row1 = top - 304;
     const int row2 = row1 - buttonHeight - gap;
     const int row3 = row2 - buttonHeight - gap;
     const int row4 = row3 - buttonHeight - gap;
     const int row5 = row4 - buttonHeight - gap;
+    const int row6 = row5 - buttonHeight - gap;
+    const int row7 = row6 - buttonHeight - gap;
     const int col1 = left + 16;
     const int col2 = col1 + buttonWidth + gap;
     const int col3 = col2 + buttonWidth + gap;
     const int col4 = col3 + buttonWidth + gap;
 
-    AddButton(col1, row1, buttonWidth, buttonHeight, ButtonAction::ShowMarker, "Show Marker");
-    AddButton(col2, row1, buttonWidth, buttonHeight, ButtonAction::HideMarker, "Hide Marker");
-    AddButton(col3, row1, buttonWidth, buttonHeight, ButtonAction::CycleMoveStep, "Move Step");
-    AddButton(col4, row1, buttonWidth, buttonHeight, ButtonAction::CycleRotStep, "Rot Step");
+    AddButton(col1, row1, buttonWidth, buttonHeight, ButtonAction::CycleTarget, "Target");
+    AddButton(col2, row1, buttonWidth, buttonHeight, ButtonAction::ShowProxy, "Show Proxy");
+    AddButton(col3, row1, buttonWidth, buttonHeight, ButtonAction::HideProxy, "Hide Proxy");
+    AddButton(col4, row1, buttonWidth, buttonHeight, ButtonAction::ExportPlacement, "Export");
 
-    AddButton(col1, row2, buttonWidth, buttonHeight, ButtonAction::XNegative, "Right/Stbd");
-    AddButton(col2, row2, buttonWidth, buttonHeight, ButtonAction::XPositive, "Left/Port");
-    AddButton(col3, row2, buttonWidth, buttonHeight, ButtonAction::YNegative, "Down");
-    AddButton(col4, row2, buttonWidth, buttonHeight, ButtonAction::YPositive, "Up");
+    AddButton(col1, row2, buttonWidth, buttonHeight, ButtonAction::CycleMoveStep, "Move Step");
+    AddButton(col2, row2, buttonWidth, buttonHeight, ButtonAction::CycleRotStep, "Rot Step");
+    AddButton(col3, row2, buttonWidth, buttonHeight, ButtonAction::CycleSizeStep, "Size Step");
+    AddButton(col4, row2, buttonWidth, buttonHeight, ButtonAction::ResetProxy, "Reset Proxy");
 
-    AddButton(col1, row3, buttonWidth, buttonHeight, ButtonAction::ZNegative, "Aft");
-    AddButton(col2, row3, buttonWidth, buttonHeight, ButtonAction::ZPositive, "Fore");
+    AddButton(col1, row3, buttonWidth, buttonHeight, ButtonAction::XNegative, "Right/Stbd");
+    AddButton(col2, row3, buttonWidth, buttonHeight, ButtonAction::XPositive, "Left/Port");
+    AddButton(col3, row3, buttonWidth, buttonHeight, ButtonAction::YNegative, "Down");
+    AddButton(col4, row3, buttonWidth, buttonHeight, ButtonAction::YPositive, "Up");
 
-    AddButton(col1, row4, buttonWidth, buttonHeight, ButtonAction::RollNegative, "Roll -");
-    AddButton(col2, row4, buttonWidth, buttonHeight, ButtonAction::RollPositive, "Roll +");
-    AddButton(col3, row4, buttonWidth, buttonHeight, ButtonAction::PitchNegative, "Pitch -");
-    AddButton(col4, row4, buttonWidth, buttonHeight, ButtonAction::PitchPositive, "Pitch +");
+    AddButton(col1, row4, buttonWidth, buttonHeight, ButtonAction::ZNegative, "Aft");
+    AddButton(col2, row4, buttonWidth, buttonHeight, ButtonAction::ZPositive, "Fore");
+    AddButton(col3, row4, buttonWidth, buttonHeight, ButtonAction::WidthNegative, "Width -");
+    AddButton(col4, row4, buttonWidth, buttonHeight, ButtonAction::WidthPositive, "Width +");
 
-    AddButton(col1, row5, buttonWidth, buttonHeight, ButtonAction::YawNegative, "Yaw -");
-    AddButton(col2, row5, buttonWidth, buttonHeight, ButtonAction::YawPositive, "Yaw +");
+    AddButton(col1, row5, buttonWidth, buttonHeight, ButtonAction::HeightNegative, "Height -");
+    AddButton(col2, row5, buttonWidth, buttonHeight, ButtonAction::HeightPositive, "Height +");
+    AddButton(col3, row5, buttonWidth, buttonHeight, ButtonAction::RollNegative, "Roll -");
+    AddButton(col4, row5, buttonWidth, buttonHeight, ButtonAction::RollPositive, "Roll +");
+
+    AddButton(col1, row6, buttonWidth, buttonHeight, ButtonAction::PitchNegative, "Pitch -");
+    AddButton(col2, row6, buttonWidth, buttonHeight, ButtonAction::PitchPositive, "Pitch +");
+    AddButton(col3, row6, buttonWidth, buttonHeight, ButtonAction::YawNegative, "Yaw -");
+    AddButton(col4, row6, buttonWidth, buttonHeight, ButtonAction::YawPositive, "Yaw +");
+
+    AddButton(col1, row7, buttonWidth, buttonHeight, ButtonAction::CalibrateHere, "Calibrate Here");
+    AddButton(col2, row7, buttonWidth, buttonHeight, ButtonAction::ClearCalibration, "Clear Cal");
 }
 
 void DrawButton(const Button& button) {
@@ -240,39 +270,60 @@ void LogButtonAction(const char* label) {
 void ExecuteButtonAction(ButtonAction action) {
     const float moveStep = CurrentMoveStepMeters();
     const float rotStep = CurrentRotStepDegrees();
+    const float sizeStep = CurrentSizeStepMeters();
 
     switch (action) {
-        case ButtonAction::ShowMarker:
-            LogButtonAction("Show Marker");
-            xpto::ShowTestMarker();
+        case ButtonAction::CycleTarget:
+            LogButtonAction("Target");
+            xpto::CycleSelectedProxyTarget();
             break;
-        case ButtonAction::HideMarker:
-            LogButtonAction("Hide Marker");
-            xpto::HideTestMarker();
+        case ButtonAction::ShowProxy:
+            LogButtonAction("Show Proxy");
+            xpto::ShowSelectedProxy();
+            break;
+        case ButtonAction::HideProxy:
+            LogButtonAction("Hide Proxy");
+            xpto::HideSelectedProxy();
+            break;
+        case ButtonAction::ExportPlacement:
+            LogButtonAction("Export");
+            xpto::ExportSelectedProxyPlacement();
+            break;
+        case ButtonAction::ResetProxy:
+            LogButtonAction("Reset Proxy");
+            xpto::ResetSelectedProxy();
+            break;
+        case ButtonAction::CalibrateHere:
+            LogButtonAction("Calibrate Here");
+            xpto::CalibrateSelectedProxyHere();
+            break;
+        case ButtonAction::ClearCalibration:
+            LogButtonAction("Clear Cal");
+            xpto::ClearSelectedProxyCalibration();
             break;
         case ButtonAction::XPositive:
             LogButtonAction("Left/Port");
-            xpto::NudgeTestMarker(moveStep, 0.0f, 0.0f);
+            xpto::NudgeSelectedProxy(moveStep, 0.0f, 0.0f);
             break;
         case ButtonAction::XNegative:
             LogButtonAction("Right/Stbd");
-            xpto::NudgeTestMarker(-moveStep, 0.0f, 0.0f);
+            xpto::NudgeSelectedProxy(-moveStep, 0.0f, 0.0f);
             break;
         case ButtonAction::YPositive:
             LogButtonAction("Up");
-            xpto::NudgeTestMarker(0.0f, moveStep, 0.0f);
+            xpto::NudgeSelectedProxy(0.0f, moveStep, 0.0f);
             break;
         case ButtonAction::YNegative:
             LogButtonAction("Down");
-            xpto::NudgeTestMarker(0.0f, -moveStep, 0.0f);
+            xpto::NudgeSelectedProxy(0.0f, -moveStep, 0.0f);
             break;
         case ButtonAction::ZPositive:
             LogButtonAction("Fore");
-            xpto::NudgeTestMarker(0.0f, 0.0f, moveStep);
+            xpto::NudgeSelectedProxy(0.0f, 0.0f, moveStep);
             break;
         case ButtonAction::ZNegative:
             LogButtonAction("Aft");
-            xpto::NudgeTestMarker(0.0f, 0.0f, -moveStep);
+            xpto::NudgeSelectedProxy(0.0f, 0.0f, -moveStep);
             break;
         case ButtonAction::CycleMoveStep:
             g_moveStepIndex = (g_moveStepIndex + 1) % 5;
@@ -282,29 +333,49 @@ void ExecuteButtonAction(ButtonAction action) {
             g_rotStepIndex = (g_rotStepIndex + 1) % 4;
             LogButtonAction("Rot Step");
             break;
+        case ButtonAction::CycleSizeStep:
+            g_sizeStepIndex = (g_sizeStepIndex + 1) % 4;
+            LogButtonAction("Size Step");
+            break;
         case ButtonAction::RollPositive:
             LogButtonAction("Roll +");
-            xpto::RotateTestMarker(xpto::MarkerRotationAxis::Roll, rotStep);
+            xpto::RotateSelectedProxy(xpto::ProxyRotationAxis::Roll, rotStep);
             break;
         case ButtonAction::RollNegative:
             LogButtonAction("Roll -");
-            xpto::RotateTestMarker(xpto::MarkerRotationAxis::Roll, -rotStep);
+            xpto::RotateSelectedProxy(xpto::ProxyRotationAxis::Roll, -rotStep);
             break;
         case ButtonAction::PitchPositive:
             LogButtonAction("Pitch +");
-            xpto::RotateTestMarker(xpto::MarkerRotationAxis::Pitch, rotStep);
+            xpto::RotateSelectedProxy(xpto::ProxyRotationAxis::Pitch, rotStep);
             break;
         case ButtonAction::PitchNegative:
             LogButtonAction("Pitch -");
-            xpto::RotateTestMarker(xpto::MarkerRotationAxis::Pitch, -rotStep);
+            xpto::RotateSelectedProxy(xpto::ProxyRotationAxis::Pitch, -rotStep);
             break;
         case ButtonAction::YawPositive:
             LogButtonAction("Yaw +");
-            xpto::RotateTestMarker(xpto::MarkerRotationAxis::Yaw, rotStep);
+            xpto::RotateSelectedProxy(xpto::ProxyRotationAxis::Yaw, rotStep);
             break;
         case ButtonAction::YawNegative:
             LogButtonAction("Yaw -");
-            xpto::RotateTestMarker(xpto::MarkerRotationAxis::Yaw, -rotStep);
+            xpto::RotateSelectedProxy(xpto::ProxyRotationAxis::Yaw, -rotStep);
+            break;
+        case ButtonAction::WidthPositive:
+            LogButtonAction("Width +");
+            xpto::ResizeSelectedProxy(xpto::ProxySizeAxis::Width, sizeStep);
+            break;
+        case ButtonAction::WidthNegative:
+            LogButtonAction("Width -");
+            xpto::ResizeSelectedProxy(xpto::ProxySizeAxis::Width, -sizeStep);
+            break;
+        case ButtonAction::HeightPositive:
+            LogButtonAction("Height +");
+            xpto::ResizeSelectedProxy(xpto::ProxySizeAxis::Height, sizeStep);
+            break;
+        case ButtonAction::HeightNegative:
+            LogButtonAction("Height -");
+            xpto::ResizeSelectedProxy(xpto::ProxySizeAxis::Height, -sizeStep);
             break;
         case ButtonAction::None:
             break;
@@ -320,64 +391,114 @@ void DrawWindow(XPLMWindowID windowId, void*) {
 
     XPLMDrawTranslucentDarkBox(left, top, right, bottom);
 
-    const xpto::MarkerState markerState = xpto::GetTestMarkerState();
+    const xpto::ProxyState proxyState = xpto::GetSelectedProxyState();
 
     float white[] = {1.0f, 1.0f, 1.0f};
     char title[] = "XPTO Runtime Tuner";
-    char subtitle[] = "XPLM instance proof - no overlay movement";
+    char subtitle[] = "Developer ACF placement proxy/export";
     char desktopMode[] = "Window mode: 2D floating";
     char vrMode[] = "Window mode: VR";
     char* modeText = g_vrActive ? vrMode : desktopMode;
-    char markerText[96] = {};
-    char moveStepText[64] = {};
-    char rotStepText[64] = {};
-    char offsetText[128] = {};
-    char rotationText[128] = {};
-    char positionText[128] = {};
+    char targetText[128] = {};
+    char stateText[128] = {};
+    char stepText[160] = {};
+    char placementText[160] = {};
+    char rotationText[160] = {};
+    char sizeText[160] = {};
+    char calibrationText[180] = {};
+    char correctedText[200] = {};
+    char finalText[160] = {};
+    char exportText[220] = {};
 
-    std::snprintf(markerText, sizeof(markerText), "Marker: %s", markerState.visible ? "shown" : "hidden");
-    const float moveStepMeters = CurrentMoveStepMeters();
-    if (moveStepMeters < 0.01f) {
-        std::snprintf(moveStepText, sizeof(moveStepText), "Move Step: %.3f m", moveStepMeters);
-    } else {
-        std::snprintf(moveStepText, sizeof(moveStepText), "Move Step: %.2f m", moveStepMeters);
-    }
-    std::snprintf(rotStepText, sizeof(rotStepText), "Rot Step: %.1f deg", CurrentRotStepDegrees());
+    std::snprintf(targetText, sizeof(targetText), "Target: %s", proxyState.targetName);
     std::snprintf(
-        offsetText,
-        sizeof(offsetText),
-        "Body offset XYZ: %.3f, %.3f, %.3f",
-        markerState.bodyOffset.x,
-        markerState.bodyOffset.y,
-        markerState.bodyOffset.z);
+        stateText,
+        sizeof(stateText),
+        "Proxy: %s  Loaded: %s  Instance: %s",
+        proxyState.visible ? "shown" : "hidden",
+        proxyState.objectLoaded ? "yes" : "no",
+        proxyState.instanceCreated ? "yes" : "no");
+    std::snprintf(
+        stepText,
+        sizeof(stepText),
+        "Move %.3f m   Rot %.1f deg   Size %.3f m",
+        CurrentMoveStepMeters(),
+        CurrentRotStepDegrees(),
+        CurrentSizeStepMeters());
+    std::snprintf(
+        placementText,
+        sizeof(placementText),
+        "ACF candidate XYZ: %.3f, %.3f, %.3f",
+        proxyState.placement.x,
+        proxyState.placement.y,
+        proxyState.placement.z);
     std::snprintf(
         rotationText,
         sizeof(rotationText),
-        "Rot R/P/Y: %.1f, %.1f, %.1f deg",
-        markerState.rotation.roll,
-        markerState.rotation.pitch,
-        markerState.rotation.yaw);
-    if (markerState.hasPosition) {
+        "ACF pitch/yaw/roll: %.2f, %.2f, %.2f deg",
+        proxyState.rotation.pitch,
+        proxyState.rotation.yaw,
+        proxyState.rotation.roll);
+    std::snprintf(
+        sizeText,
+        sizeof(sizeText),
+        "Proxy size W/H: %.4f, %.4f m  scale %.3f, %.3f",
+        proxyState.size.width,
+        proxyState.size.height,
+        proxyState.size.scaleX,
+        proxyState.size.scaleY);
+    std::snprintf(
+        calibrationText,
+        sizeof(calibrationText),
+        "Calibration: %s  Offset XYZ: %.3f, %.3f, %.3f",
+        proxyState.calibrated ? "yes" : "no",
+        proxyState.calibrationOffset.x,
+        proxyState.calibrationOffset.y,
+        proxyState.calibrationOffset.z);
+    std::snprintf(
+        correctedText,
+        sizeof(correctedText),
+        "Corrected ACF XYZ: %.3f, %.3f, %.3f  P/Y/R: %.2f, %.2f, %.2f",
+        proxyState.correctedPlacement.x,
+        proxyState.correctedPlacement.y,
+        proxyState.correctedPlacement.z,
+        proxyState.correctedRotation.pitch,
+        proxyState.correctedRotation.yaw,
+        proxyState.correctedRotation.roll);
+    if (proxyState.hasPosition) {
         std::snprintf(
-            positionText,
-            sizeof(positionText),
-            "Final local XYZ: %.2f, %.2f, %.2f",
-            markerState.position.x,
-            markerState.position.y,
-            markerState.position.z);
+            finalText,
+            sizeof(finalText),
+            "Debug final local XYZ: %.2f, %.2f, %.2f",
+            proxyState.finalLocalPosition.x,
+            proxyState.finalLocalPosition.y,
+            proxyState.finalLocalPosition.z);
     } else {
-        std::snprintf(positionText, sizeof(positionText), "Final local XYZ: unavailable");
+        std::snprintf(finalText, sizeof(finalText), "Debug final local XYZ: unavailable");
+    }
+    if (proxyState.lastExportPath[0] != '\0') {
+        std::snprintf(
+            exportText,
+            sizeof(exportText),
+            "Last export: %s",
+            proxyState.lastExportSucceeded ? proxyState.lastExportPath : "failed");
+    } else {
+        std::snprintf(exportText, sizeof(exportText), "Last export: none");
     }
 
     XPLMDrawString(white, left + 16, top - 28, title, nullptr, xplmFont_Basic);
     XPLMDrawString(white, left + 16, top - 50, subtitle, nullptr, xplmFont_Basic);
     XPLMDrawString(white, left + 16, top - 72, modeText, nullptr, xplmFont_Basic);
-    XPLMDrawString(white, left + 16, top - 94, markerText, nullptr, xplmFont_Basic);
-    XPLMDrawString(white, left + 150, top - 94, moveStepText, nullptr, xplmFont_Basic);
-    XPLMDrawString(white, left + 330, top - 94, rotStepText, nullptr, xplmFont_Basic);
-    XPLMDrawString(white, left + 16, top - 116, offsetText, nullptr, xplmFont_Basic);
-    XPLMDrawString(white, left + 16, top - 138, rotationText, nullptr, xplmFont_Basic);
-    XPLMDrawString(white, left + 16, top - 160, positionText, nullptr, xplmFont_Basic);
+    XPLMDrawString(white, left + 16, top - 94, targetText, nullptr, xplmFont_Basic);
+    XPLMDrawString(white, left + 16, top - 116, stateText, nullptr, xplmFont_Basic);
+    XPLMDrawString(white, left + 16, top - 138, stepText, nullptr, xplmFont_Basic);
+    XPLMDrawString(white, left + 16, top - 160, placementText, nullptr, xplmFont_Basic);
+    XPLMDrawString(white, left + 16, top - 182, rotationText, nullptr, xplmFont_Basic);
+    XPLMDrawString(white, left + 16, top - 204, sizeText, nullptr, xplmFont_Basic);
+    XPLMDrawString(white, left + 16, top - 226, calibrationText, nullptr, xplmFont_Basic);
+    XPLMDrawString(white, left + 16, top - 248, correctedText, nullptr, xplmFont_Basic);
+    XPLMDrawString(white, left + 16, top - 270, finalText, nullptr, xplmFont_Basic);
+    XPLMDrawString(white, left + 16, bottom + 18, exportText, nullptr, xplmFont_Basic);
 
     BuildButtons(left, top);
     for (int i = 0; i < g_buttonCount; ++i) {
@@ -437,7 +558,7 @@ void CreateRuntimeWindow() {
     }
 
     XPLMSetWindowTitle(g_window, "XPTO Runtime Tuner");
-    XPLMSetWindowResizingLimits(g_window, 500, 380, 980, 700);
+    XPLMSetWindowResizingLimits(g_window, 540, 620, 1100, 900);
     ApplyCurrentPositioningMode();
     StoreCurrentDesktopGeometry();
 }
@@ -485,3 +606,4 @@ void DestroyRuntimeWindow() {
 }
 
 }  // namespace xpto
+

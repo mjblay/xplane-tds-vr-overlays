@@ -6,19 +6,19 @@ Plugin-created XPLM instances can move visible geometry, but plugin-created inst
 
 The working TDS GTN overlays are the aircraft-attached ACF object entries installed by the offline XPTO installer. XPTO should not try to replace those working ACF-attached overlays with plugin-created overlay instances.
 
-The near-term tuning path is documented in [ACF Placement Tuning](acf-placement-tuning.md): edit the prepared aircraft `.acf` overlay object placement, keep an external backup, and reload the aircraft.
+The near-term tuning path is a two-step workflow: use the runtime plugin as a visual proxy/export tool, then apply exported placement values to the prepared aircraft `.acf` with the CLI and reload the aircraft. See [Runtime Proxy Export Workflow](runtime-proxy-export-workflow.md) and [ACF Placement Tuning](acf-placement-tuning.md).
 
 ## Goals
 
 - One-time end-user aircraft preparation
-- Safe inspection of XPTO-installed aircraft-attached overlay object entries
+- Runtime visual proxy positioning/export for GTN750 U1 and GTN650 U2\n- Safe inspection of XPTO-installed aircraft-attached overlay object entries
 - File-backed placement edits with external backups
 - Aircraft reload workflow for validating placement
 - Preserve working TDS `ATTR_cockpit_device` / `ATTR_manip_device` behavior by keeping overlays aircraft-attached
 
 ## Non-goals
 
-- Replacing working ACF-attached TDS overlays with plugin-created instances
+- Replacing working ACF-attached TDS overlays with plugin-created instances\n- Treating magenta borders or proxy geometry as the final overlay objective
 - Building more marker, proxy, or magenta-border infrastructure as the primary target
 - Editing payware source aircraft in place by default
 - Writing placement changes without an external backup
@@ -48,3 +48,4 @@ The near-term tuning path is documented in [ACF Placement Tuning](acf-placement-
 - Can a plugin observe TDS plugin menu selection/state directly?
 - Can a plugin help display current tuning values without owning the overlay object?
 - Is there any SDK-supported way to influence aircraft-attached object placement live without reloading the aircraft?
+

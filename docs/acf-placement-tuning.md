@@ -8,7 +8,9 @@ Runtime plugin-created XPLM instances proved that visible geometry can be moved 
 
 The working TDS GTN overlays are the aircraft-attached ACF object entries installed by the offline XPTO installer. Those objects keep the TDS `ATTR_cockpit_device` / `ATTR_manip_device` behavior active. The runtime plugin should not replace them with plugin-created overlay instances.
 
-## CLI Commands
+## Runtime Proxy Export
+
+The runtime plugin can export `Resources/plugins/XPTO/exports/xpto-placement-export.json` after the developer positions a visual proxy. The JSON `placement` object contains direct ACF candidate x/y/z/pitch/yaw/roll values, not local-world coordinates and not offsets from a debug anchor. This JSON is the handoff between live tuning and ACF editing. The current CLI still accepts explicit placement values; a future command can consume the export directly.\n\n## CLI Commands
 
 Inspect XPTO overlay objects in a prepared aircraft folder:
 
@@ -100,3 +102,6 @@ Inspection prints:
 `set-overlay-placement` requires explicit `--x`, `--y`, and `--z`. Optional `--pitch`, `--yaw`, and `--roll` update existing angle fields only.
 
 After applying an edit, reload the aircraft in X-Plane to see the aircraft-attached overlay placement change.
+
+
+

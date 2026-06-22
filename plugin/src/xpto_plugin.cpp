@@ -28,7 +28,7 @@ PLUGIN_API int XPluginStart(char* outName, char* outSignature, char* outDescript
 }
 
 PLUGIN_API void XPluginStop() {
-    xpto::DestroyTestMarker();
+    xpto::DestroyAllProxies();
     xpto::DestroyRuntimeWindow();
     xpto::DestroyMenu();
 }
@@ -38,7 +38,7 @@ PLUGIN_API int XPluginEnable() {
 }
 
 PLUGIN_API void XPluginDisable() {
-    xpto::HideTestMarker();
+    xpto::HideSelectedProxy();
     xpto::DestroyRuntimeWindow();
 }
 
